@@ -1,34 +1,42 @@
-# 発信ログ
+# Hasshin Labo
 
-React + Vite で作った、発信活動を記録するためのMVPアプリです。データはブラウザの `localStorage` に保存されます。
+発信ログをスマホでも使えるWebアプリです。
 
-## 使い方
+公開URL:
+
+```text
+https://mcwgw408-oss.github.io/hasshin-Labo/
+```
+
+スマホでは、このURLをSafariやChromeで開けば操作できます。最後の `/` まで入れて開くと404になりにくいです。
+
+## スマホで404が出るとき
+
+次を順番に確認してください。
+
+1. URLが `https://mcwgw408-oss.github.io/hasshin-Labo/` になっているか確認する。
+2. `hasshin-Labo` の大文字小文字が同じか確認する。
+3. URLの最後に `/` を付ける。
+4. ブラウザを更新する。
+5. それでも古い画面が出る場合は、スマホのブラウザでページを再読み込みする。
+
+## データについて
+
+入力したデータは、その端末のブラウザに保存されます。
+
+PCで入力したデータはPCに、スマホで入力したデータはスマホに保存されます。現時点ではPCとスマホの自動同期はありません。
+
+## 開発用
+
+PCで確認する場合:
 
 ```bash
 npm install
 npm run dev
 ```
 
-## GitHubでクリックだけで公開する方法
+公開用ファイルを作る場合:
 
-1. GitHubで新しいリポジトリを作成します。
-2. リポジトリ画面の `Add file` から `Upload files` を選びます。
-3. このフォルダ内のファイルをアップロードします。`node_modules` と `dist` はアップロード不要です。
-4. `Commit changes` をクリックします。
-5. リポジトリの `Settings` を開きます。
-6. 左メニューの `Pages` を開きます。
-7. `Build and deployment` の `Source` で `Deploy from a branch` を選びます。
-8. `Branch` を `main`、フォルダを `/docs` にして `Save` をクリックします。
-9. 少し待ってから `Settings` → `Pages` に表示されるURLを開くと、発信ログアプリを使えます。
-
-## 画面
-
-- ダッシュボード
-- ログ一覧
-- 新規登録・編集
-
-## 最初の分析項目
-
-- 今月の投稿数
-- 媒体別投稿数
-- 一番反応が良かった投稿
+```bash
+npm run build
+```
