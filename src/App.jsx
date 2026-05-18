@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 const logStorageKey = "hasshin-labo.logs.v2";
 const seriesStorageKey = "hasshin-labo.note-series.v1";
 const articleStorageKey = "hasshin-labo.note-articles.v1";
+const xCandidateStorageKey = "hasshin-labo.x-candidates.v1";
+const threadsCandidateStorageKey = "hasshin-labo.threads-candidates.v1";
 const todayStorageKey = "hasshin-labo.today.v1";
 
 const channels = ["X", "note", "Threads", "Instagram", "YouTube", "TikTok", "その他"];
@@ -11,6 +13,7 @@ const seriesStatuses = ["企画中", "執筆中", "公開中", "完了"];
 const priceTypes = ["無料", "有料", "無料+有料"];
 const articleStatuses = ["候補", "構成中", "執筆中", "公開済み", "保留"];
 const articleStructureItems = ["共感", "構造", "不安"];
+const socialCandidateStatuses = ["候補", "作成中", "投稿済み", "保留"];
 
 const emptyToday = {
   selectedArticleId: "",
@@ -73,6 +76,21 @@ const emptyArticleForm = {
   publishedUrl: "",
 };
 
+const emptySocialCandidateForm = {
+  id: "",
+  title: "",
+  status: "候補",
+  priority: "中",
+  dueDate: "",
+  publishedUrl: "",
+  targetReader: "",
+  goal: "",
+  hook: "",
+  body: "",
+  cta: "",
+  memo: "",
+};
+
 function today() {
   const date = new Date();
   const year = date.getFullYear();
@@ -131,15 +149,29 @@ function priorityRank(priority) {
   return 2;
 }
 
+function summarizeSocialCandidates(items) {
+  const activeCount = items.filter((item) => item.status !== "投稿済み" && item.status !== "保留").length;
+  const publishedCount = items.filter((item) => item.status === "投稿済み").length;
+  const nextItem = [...items]
+    .filter((item) => item.status !== "投稿済み" && item.status !== "保留")
+    .sort((a, b) => `${a.dueDate || "9999"}${priorityRank(a.priority)}`.localeCompare(`${b.dueDate || "9999"}${priorityRank(b.priority)}`))[0];
+
+  return { activeCount, publishedCount, nextItem };
+}
+
 function App() {
   const [logs, setLogs] = useState(() => loadArray(logStorageKey));
   const [series, setSeries] = useState(() => loadArray(seriesStorageKey));
   const [articles, setArticles] = useState(() => loadArray(articleStorageKey));
+  const [xCandidates, setXCandidates] = useState(() => loadArray(xCandidateStorageKey));
+  const [threadsCandidates, setThreadsCandidates] = useState(() => loadArray(threadsCandidateStorageKey));
   const [todayMemo, setTodayMemo] = useState(() => loadObject(todayStorageKey, emptyToday));
   const [activeView, setActiveView] = useState("home");
   const [logForm, setLogForm] = useState(emptyLogForm);
   const [seriesForm, setSeriesForm] = useState(emptySeriesForm);
   const [articleForm, setArticleForm] = useState(emptyArticleForm);
+  const [xCandidateForm, setXCandidateForm] = useState(emptySocialCandidateForm);
+  const [threadsCandidateForm, setThreadsCandidateForm] = useState(emptySocialCandidateForm);
   const [query, setQuery] = useState("");
   const [channelFilter, setChannelFilter] = useState("すべて");
 
@@ -154,6 +186,14 @@ function App() {
   useEffect(() => {
     localStorage.setItem(articleStorageKey, JSON.stringify(articles));
   }, [articles]);
+
+  useEffect(() => {
+    localStorage.setItem(xCandidateStorageKey, JSON.stringify(xCandidates));
+  }, [xCandidates]);
+
+  useEffect(() => {
+    localStorage.setItem(threadsCandidateStorageKey, JSON.stringify(threadsCandidates));
+  }, [threadsCandidates]);
 
   useEffect(() => {
     localStorage.setItem(todayStorageKey, JSON.stringify(todayMemo));
@@ -209,6 +249,9 @@ function App() {
 
     return { activeCount, publishedCount, nextArticle };
   }, [articles]);
+
+  const xCandidateSummary = useMemo(() => summarizeSocialCandidates(xCandidates), [xCandidates]);
+  const threadsCandidateSummary = useMemo(() => summarizeSocialCandidates(threadsCandidates), [threadsCandidates]);
 
   function startNewLog() {
     setLogForm({ ...emptyLogForm, publishedAt: today() });
@@ -395,6 +438,86 @@ function App() {
     resetArticleForm();
   }
 
+  function updateXCandidateField(name, value) {
+    setXCandidateForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function updateThreadsCandidateField(name, value) {
+    setThreadsCandidateForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function resetXCandidateForm() {
+    setXCandidateForm(emptySocialCandidateForm);
+  }
+
+  function resetThreadsCandidateForm() {
+    setThreadsCandidateForm(emptySocialCandidateForm);
+  }
+
+  function saveSocialCandidate(event, form, setItems, resetForm) {
+    event.preventDefault();
+    const nextCandidate = {
+      ...form,
+      id: form.id || createId(),
+      title: form.title.trim(),
+      targetReader: form.targetReader.trim(),
+      goal: form.goal.trim(),
+      hook: form.hook.trim(),
+      body: form.body.trim(),
+      cta: form.cta.trim(),
+      memo: form.memo.trim(),
+      publishedUrl: form.publishedUrl.trim(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setItems((current) => {
+      const exists = current.some((item) => item.id === nextCandidate.id);
+      return exists ? current.map((item) => (item.id === nextCandidate.id ? nextCandidate : item)) : [nextCandidate, ...current];
+    });
+    resetForm();
+  }
+
+  function editSocialCandidate(item, setForm, view) {
+    setForm({ ...emptySocialCandidateForm, ...item });
+    setActiveView(view);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function deleteSocialCandidate(id, items, setItems) {
+    const target = items.find((item) => item.id === id);
+    if (!target) return;
+    if (!window.confirm(`「${target.title}」を削除しますか？`)) return;
+    setItems((current) => current.filter((item) => item.id !== id));
+  }
+
+  function createLogFromSocialCandidate(candidate, channel, setItems) {
+    const contentPieces = [
+      candidate.goal ? `狙い: ${candidate.goal}` : "",
+      candidate.targetReader ? `想定読者: ${candidate.targetReader}` : "",
+      candidate.hook ? `冒頭: ${candidate.hook}` : "",
+      candidate.body ? `本文: ${candidate.body}` : "",
+      candidate.cta ? `CTA: ${candidate.cta}` : "",
+      candidate.memo ? `メモ: ${candidate.memo}` : "",
+    ].filter(Boolean);
+
+    setLogForm({
+      ...emptyLogForm,
+      publishedAt: today(),
+      channel,
+      title: candidate.title,
+      contentMemo: contentPieces.join("\n\n"),
+      url: candidate.publishedUrl || "",
+      theme: `${channel}投稿`,
+      goal: "認知",
+      nextTry: candidate.cta || "",
+    });
+    setItems((current) =>
+      current.map((item) => (item.id === candidate.id ? { ...item, status: "投稿済み", updatedAt: new Date().toISOString() } : item)),
+    );
+    setActiveView("form");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -427,6 +550,14 @@ function App() {
         <button className={activeView === "articles" ? "active" : ""} type="button" onClick={() => setActiveView("articles")}>
           <span className="nav-label-full">note記事候補</span>
           <span className="nav-label-short">候補</span>
+        </button>
+        <button className={activeView === "xCandidates" ? "active" : ""} type="button" onClick={() => setActiveView("xCandidates")}>
+          <span className="nav-label-full">X候補</span>
+          <span className="nav-label-short">X</span>
+        </button>
+        <button className={activeView === "threadsCandidates" ? "active" : ""} type="button" onClick={() => setActiveView("threadsCandidates")}>
+          <span className="nav-label-full">Threads候補</span>
+          <span className="nav-label-short">Threads</span>
         </button>
       </nav>
 
@@ -491,6 +622,36 @@ function App() {
           onEdit={editArticle}
           onDelete={deleteArticle}
           onMakeToday={makeArticleToday}
+        />
+      )}
+
+      {activeView === "xCandidates" && (
+        <SocialCandidateManager
+          channel="X"
+          form={xCandidateForm}
+          items={xCandidates}
+          summary={xCandidateSummary}
+          onFieldChange={updateXCandidateField}
+          onSubmit={(event) => saveSocialCandidate(event, xCandidateForm, setXCandidates, resetXCandidateForm)}
+          onReset={resetXCandidateForm}
+          onEdit={(item) => editSocialCandidate(item, setXCandidateForm, "xCandidates")}
+          onDelete={(id) => deleteSocialCandidate(id, xCandidates, setXCandidates)}
+          onCreateLog={(item) => createLogFromSocialCandidate(item, "X", setXCandidates)}
+        />
+      )}
+
+      {activeView === "threadsCandidates" && (
+        <SocialCandidateManager
+          channel="Threads"
+          form={threadsCandidateForm}
+          items={threadsCandidates}
+          summary={threadsCandidateSummary}
+          onFieldChange={updateThreadsCandidateField}
+          onSubmit={(event) => saveSocialCandidate(event, threadsCandidateForm, setThreadsCandidates, resetThreadsCandidateForm)}
+          onReset={resetThreadsCandidateForm}
+          onEdit={(item) => editSocialCandidate(item, setThreadsCandidateForm, "threadsCandidates")}
+          onDelete={(id) => deleteSocialCandidate(id, threadsCandidates, setThreadsCandidates)}
+          onCreateLog={(item) => createLogFromSocialCandidate(item, "Threads", setThreadsCandidates)}
         />
       )}
     </main>
@@ -985,6 +1146,145 @@ function ArticleCard({ item, series, onEdit, onDelete, onMakeToday }) {
         {item.publishedUrl && (
           <a className="link-button" href={item.publishedUrl} target="_blank" rel="noreferrer">
             noteを開く
+          </a>
+        )}
+        <button className="secondary-button" type="button" onClick={() => onEdit(item)}>
+          編集
+        </button>
+        <button className="danger-button" type="button" onClick={() => onDelete(item.id)}>
+          削除
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function SocialCandidateManager({ channel, form, items, summary, onFieldChange, onSubmit, onReset, onEdit, onDelete, onCreateLog }) {
+  const sortedItems = [...items].sort((a, b) =>
+    `${a.status === "投稿済み" ? 1 : 0}${a.dueDate || "9999"}${priorityRank(a.priority)}`.localeCompare(
+      `${b.status === "投稿済み" ? 1 : 0}${b.dueDate || "9999"}${priorityRank(b.priority)}`,
+    ),
+  );
+
+  return (
+    <section className="view-stack" aria-label={`${channel}候補リスト`}>
+      <div className="summary-grid">
+        <SummaryCard label="未投稿の候補" value={summary.activeCount} />
+        <SummaryCard label="投稿済み" value={summary.publishedCount} />
+        <SummaryCard label="次に投稿する候補" value={summary.nextItem ? summary.nextItem.title : "未設定"} />
+      </div>
+
+      <article className="panel form-panel">
+        <div className="section-title">
+          <h2>{form.id ? `${channel}候補を編集` : `${channel}候補を追加`}</h2>
+        </div>
+
+        <form onSubmit={onSubmit}>
+          <div className="form-grid">
+            <Field label="投稿タイトル">
+              <input value={form.title} onChange={(event) => onFieldChange("title", event.target.value)} required maxLength="100" />
+            </Field>
+            <Field label="ステータス">
+              <select value={form.status} onChange={(event) => onFieldChange("status", event.target.value)}>
+                {socialCandidateStatuses.map((status) => (
+                  <option value={status} key={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="優先度">
+              <select value={form.priority} onChange={(event) => onFieldChange("priority", event.target.value)}>
+                <option value="高">高</option>
+                <option value="中">中</option>
+                <option value="低">低</option>
+              </select>
+            </Field>
+            <Field label="投稿日目安">
+              <input value={form.dueDate} onChange={(event) => onFieldChange("dueDate", event.target.value)} type="date" />
+            </Field>
+            <Field label="投稿URL">
+              <input value={form.publishedUrl} onChange={(event) => onFieldChange("publishedUrl", event.target.value)} type="url" placeholder="https://..." />
+            </Field>
+            <Field label="狙い">
+              <input value={form.goal} onChange={(event) => onFieldChange("goal", event.target.value)} placeholder="例: 認知、note誘導、反応を見る" />
+            </Field>
+          </div>
+
+          <Field label="想定読者">
+            <textarea value={form.targetReader} onChange={(event) => onFieldChange("targetReader", event.target.value)} rows="3" />
+          </Field>
+          <Field label="冒頭の掴み">
+            <textarea value={form.hook} onChange={(event) => onFieldChange("hook", event.target.value)} rows="3" />
+          </Field>
+          <Field label="投稿本文">
+            <textarea value={form.body} onChange={(event) => onFieldChange("body", event.target.value)} rows={channel === "X" ? "4" : "5"} />
+          </Field>
+          <Field label="CTA / 読後にしてほしいこと">
+            <input value={form.cta} onChange={(event) => onFieldChange("cta", event.target.value)} />
+          </Field>
+          <Field label="メモ">
+            <textarea value={form.memo} onChange={(event) => onFieldChange("memo", event.target.value)} rows="3" />
+          </Field>
+
+          <div className="form-actions">
+            <button className="secondary-button" type="button" onClick={onReset}>
+              クリア
+            </button>
+            <button className="primary-button" type="submit">
+              保存
+            </button>
+          </div>
+        </form>
+      </article>
+
+      <div className="cards-grid">
+        {sortedItems.length ? (
+          sortedItems.map((item) => (
+            <SocialCandidateCard item={item} channel={channel} key={item.id} onEdit={onEdit} onDelete={onDelete} onCreateLog={onCreateLog} />
+          ))
+        ) : (
+          <EmptyState text={`${channel}候補はまだありません。`} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function SocialCandidateCard({ item, channel, onEdit, onDelete, onCreateLog }) {
+  return (
+    <article className="log-card social-candidate-card">
+      <div className="card-head">
+        <div>
+          <span className="date-text">投稿日目安: {formatDate(item.dueDate)}</span>
+          <h3>{item.title}</h3>
+        </div>
+        <span className="badge">{item.status}</span>
+      </div>
+
+      <div className="tag-row">
+        <span>{channel}</span>
+        <span>優先度: {item.priority}</span>
+        {item.goal && <span>{item.goal}</span>}
+      </div>
+
+      <div className="reflection-grid">
+        <Reflection label="想定読者" value={item.targetReader} />
+        <Reflection label="冒頭の掴み" value={item.hook} />
+        <Reflection label="投稿本文" value={item.body} />
+        <Reflection label="CTA" value={item.cta} />
+        <Reflection label="メモ" value={item.memo} />
+      </div>
+
+      <div className="card-actions">
+        {item.status !== "投稿済み" && (
+          <button className="primary-button" type="button" onClick={() => onCreateLog(item)}>
+            投稿ログにする
+          </button>
+        )}
+        {item.publishedUrl && (
+          <a className="link-button" href={item.publishedUrl} target="_blank" rel="noreferrer">
+            投稿を開く
           </a>
         )}
         <button className="secondary-button" type="button" onClick={() => onEdit(item)}>

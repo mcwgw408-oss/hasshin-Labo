@@ -145,7 +145,7 @@ h3 {
   top: 0;
   z-index: 4;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 6px;
   margin-bottom: 16px;
   padding: 6px;
@@ -454,6 +454,10 @@ textarea:focus {
   border-left: 4px solid #53605a;
 }
 
+.social-candidate-card {
+  border-left: 4px solid #0f766e;
+}
+
 .card-head {
   display: flex;
   align-items: start;
@@ -656,7 +660,7 @@ label {
     bottom: max(8px, env(safe-area-inset-bottom));
     left: 8px;
     z-index: 20;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 4px;
     margin: 0;
     padding: 6px;
