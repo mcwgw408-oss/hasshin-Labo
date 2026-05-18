@@ -1,0 +1,11 @@
+{
+  "name": "発信Labo",
+  "short_name": "発信Labo",
+  "description": "発信ログ、note記事候補、noteシリーズを管理するアプリ",
+  "start_url": "/Hasshin-Labo/?v=pwa",
+  "scope": "/Hasshin-Labo/",
+  "display": "standalone",
+  "background_color": "#f6f7f4",
+  "theme_color": "#0f766e",
+  "lang": "ja"
+}
