@@ -387,8 +387,19 @@ function App() {
   }
 
   function createLogFromArticleCandidate(article) {
-    setLogForm(buildLogFromArticle(article));
-    setActiveView("form");
+    upsertLogFromArticle(article);
+    setArticles((current) =>
+      current.map((item) =>
+        item.id === article.id
+          ? {
+              ...item,
+              status: "公開済み",
+              updatedAt: new Date().toISOString(),
+            }
+          : item,
+      ),
+    );
+    setActiveView("list");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -645,8 +656,20 @@ function App() {
   }
 
   function createLogFromSocialCandidate(candidate, channel) {
-    setLogForm(buildLogFromSocialCandidate(candidate, channel));
-    setActiveView("form");
+    upsertLogFromSocialCandidate(candidate, channel);
+    const setItems = channel === "X" ? setXCandidates : setThreadsCandidates;
+    setItems((current) =>
+      current.map((item) =>
+        item.id === candidate.id
+          ? {
+              ...item,
+              status: "投稿済み",
+              updatedAt: new Date().toISOString(),
+            }
+          : item,
+      ),
+    );
+    setActiveView("list");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
