@@ -27,6 +27,8 @@ const emptyToday = {
 const emptyLogForm = {
   id: "",
   sourceArticleId: "",
+  sourceCandidateId: "",
+  sourceCandidateType: "",
   publishedAt: today(),
   channel: "X",
   title: "",
@@ -179,6 +181,32 @@ function buildLogFromArticle(article, overrides = {}) {
     theme: "note記事",
     goal: "note誘導",
     nextTry: article.cta || "",
+    ...overrides,
+  };
+}
+
+function buildLogFromSocialCandidate(candidate, channel, overrides = {}) {
+  const contentPieces = [
+    candidate.goal ? `狙い: ${candidate.goal}` : "",
+    candidate.targetReader ? `想定読者: ${candidate.targetReader}` : "",
+    candidate.hook ? `冒頭: ${candidate.hook}` : "",
+    candidate.body ? `本文: ${candidate.body}` : "",
+    candidate.cta ? `CTA: ${candidate.cta}` : "",
+    candidate.memo ? `メモ: ${candidate.memo}` : "",
+  ].filter(Boolean);
+
+  return {
+    ...emptyLogForm,
+    sourceCandidateId: candidate.id,
+    sourceCandidateType: channel,
+    publishedAt: candidate.dueDate || today(),
+    channel,
+    title: candidate.title,
+    contentMemo: contentPieces.join("\n\n"),
+    url: candidate.publishedUrl || "",
+    theme: `${channel}投稿`,
+    goal: candidate.goal || "認知",
+    nextTry: candidate.cta || "",
     ...overrides,
   };
 }
@@ -401,6 +429,36 @@ function App() {
       );
     }
 
+    if (nextLog.sourceCandidateId && nextLog.sourceCandidateType === "X") {
+      setXCandidates((current) =>
+        current.map((item) =>
+          item.id === nextLog.sourceCandidateId
+            ? {
+                ...item,
+                status: "投稿済み",
+                publishedUrl: nextLog.url || item.publishedUrl,
+                updatedAt: new Date().toISOString(),
+              }
+            : item,
+        ),
+      );
+    }
+
+    if (nextLog.sourceCandidateId && nextLog.sourceCandidateType === "Threads") {
+      setThreadsCandidates((current) =>
+        current.map((item) =>
+          item.id === nextLog.sourceCandidateId
+            ? {
+                ...item,
+                status: "投稿済み",
+                publishedUrl: nextLog.url || item.publishedUrl,
+                updatedAt: new Date().toISOString(),
+              }
+            : item,
+        ),
+      );
+    }
+
     setLogForm({ ...emptyLogForm, publishedAt: today() });
     setActiveView("list");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -514,7 +572,7 @@ function App() {
     setThreadsCandidateForm(emptySocialCandidateForm);
   }
 
-  function saveSocialCandidate(event, form, setItems, resetForm) {
+  function saveSocialCandidate(event, form, channel, setItems, resetForm) {
     event.preventDefault();
     const nextCandidate = {
       ...form,
@@ -535,6 +593,12 @@ function App() {
       return exists ? current.map((item) => (item.id === nextCandidate.id ? nextCandidate : item)) : [nextCandidate, ...current];
     });
     resetForm();
+
+    if (nextCandidate.status === "投稿済み") {
+      upsertLogFromSocialCandidate(nextCandidate, channel);
+      setActiveView("list");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }
 
   function editSocialCandidate(item, setForm, view) {
@@ -550,30 +614,26 @@ function App() {
     setItems((current) => current.filter((item) => item.id !== id));
   }
 
-  function createLogFromSocialCandidate(candidate, channel, setItems) {
-    const contentPieces = [
-      candidate.goal ? `狙い: ${candidate.goal}` : "",
-      candidate.targetReader ? `想定読者: ${candidate.targetReader}` : "",
-      candidate.hook ? `冒頭: ${candidate.hook}` : "",
-      candidate.body ? `本文: ${candidate.body}` : "",
-      candidate.cta ? `CTA: ${candidate.cta}` : "",
-      candidate.memo ? `メモ: ${candidate.memo}` : "",
-    ].filter(Boolean);
+  function upsertLogFromSocialCandidate(candidate, channel) {
+    const logFields = buildLogFromSocialCandidate(candidate, channel);
+    const nextLog = {
+      ...logFields,
+      id: "",
+      title: candidate.title.trim(),
+      contentMemo: logFields.contentMemo.trim(),
+      url: candidate.publishedUrl.trim(),
+      updatedAt: new Date().toISOString(),
+    };
 
-    setLogForm({
-      ...emptyLogForm,
-      publishedAt: today(),
-      channel,
-      title: candidate.title,
-      contentMemo: contentPieces.join("\n\n"),
-      url: candidate.publishedUrl || "",
-      theme: `${channel}投稿`,
-      goal: "認知",
-      nextTry: candidate.cta || "",
+    setLogs((current) => {
+      const existing = current.find((log) => log.sourceCandidateId === candidate.id && log.sourceCandidateType === channel);
+      const logWithId = { ...nextLog, id: existing?.id || createId() };
+      return existing ? current.map((log) => (log.id === existing.id ? { ...existing, ...logWithId } : log)) : [logWithId, ...current];
     });
-    setItems((current) =>
-      current.map((item) => (item.id === candidate.id ? { ...item, status: "投稿済み", updatedAt: new Date().toISOString() } : item)),
-    );
+  }
+
+  function createLogFromSocialCandidate(candidate, channel) {
+    setLogForm(buildLogFromSocialCandidate(candidate, channel));
     setActiveView("form");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -692,11 +752,11 @@ function App() {
           items={xCandidates}
           summary={xCandidateSummary}
           onFieldChange={updateXCandidateField}
-          onSubmit={(event) => saveSocialCandidate(event, xCandidateForm, setXCandidates, resetXCandidateForm)}
+          onSubmit={(event) => saveSocialCandidate(event, xCandidateForm, "X", setXCandidates, resetXCandidateForm)}
           onReset={resetXCandidateForm}
           onEdit={(item) => editSocialCandidate(item, setXCandidateForm, "xCandidates")}
           onDelete={(id) => deleteSocialCandidate(id, xCandidates, setXCandidates)}
-          onCreateLog={(item) => createLogFromSocialCandidate(item, "X", setXCandidates)}
+          onCreateLog={(item) => createLogFromSocialCandidate(item, "X")}
         />
       )}
 
@@ -707,11 +767,11 @@ function App() {
           items={threadsCandidates}
           summary={threadsCandidateSummary}
           onFieldChange={updateThreadsCandidateField}
-          onSubmit={(event) => saveSocialCandidate(event, threadsCandidateForm, setThreadsCandidates, resetThreadsCandidateForm)}
+          onSubmit={(event) => saveSocialCandidate(event, threadsCandidateForm, "Threads", setThreadsCandidates, resetThreadsCandidateForm)}
           onReset={resetThreadsCandidateForm}
           onEdit={(item) => editSocialCandidate(item, setThreadsCandidateForm, "threadsCandidates")}
           onDelete={(id) => deleteSocialCandidate(id, threadsCandidates, setThreadsCandidates)}
-          onCreateLog={(item) => createLogFromSocialCandidate(item, "Threads", setThreadsCandidates)}
+          onCreateLog={(item) => createLogFromSocialCandidate(item, "Threads")}
         />
       )}
     </main>
@@ -1221,7 +1281,8 @@ function ArticleCard({ item, series, onEdit, onDelete, onCreateLog }) {
 }
 
 function SocialCandidateManager({ channel, form, items, summary, onFieldChange, onSubmit, onReset, onEdit, onDelete, onCreateLog }) {
-  const sortedItems = [...items].sort((a, b) =>
+  const visibleItems = items.filter((item) => item.status !== "投稿済み" && item.status !== "保留");
+  const sortedItems = [...visibleItems].sort((a, b) =>
     `${a.status === "投稿済み" ? 1 : 0}${a.dueDate || "9999"}${priorityRank(a.priority)}`.localeCompare(
       `${b.status === "投稿済み" ? 1 : 0}${b.dueDate || "9999"}${priorityRank(b.priority)}`,
     ),
