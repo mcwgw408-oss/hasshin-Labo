@@ -726,7 +726,7 @@ function App() {
           todayMemo={todayMemo}
           onTodayMemoChange={(name, value) => setTodayMemo((current) => ({ ...current, [name]: value }))}
           onCreateLogFromToday={createLogFromToday}
-          onMakeArticleToday={makeArticleToday}
+          onCreateLogFromArticle={createLogFromArticleCandidate}
           onEditSeries={editSeries}
         />
       )}
@@ -813,7 +813,7 @@ function App() {
   );
 }
 
-function Home({ data, series, seriesSummary, articles, articleSummary, todayMemo, onTodayMemoChange, onCreateLogFromToday, onMakeArticleToday, onEditSeries }) {
+function Home({ data, series, seriesSummary, articles, articleSummary, todayMemo, onTodayMemoChange, onCreateLogFromToday, onCreateLogFromArticle, onEditSeries }) {
   return (
     <section className="view-stack" aria-label="トップ">
       <div className="home-grid">
@@ -821,7 +821,7 @@ function Home({ data, series, seriesSummary, articles, articleSummary, todayMemo
         <SeriesProgressPanel series={series} summary={seriesSummary} onEditSeries={onEditSeries} />
       </div>
 
-      <ArticleQueuePanel articles={articles} summary={articleSummary} onMakeToday={onMakeArticleToday} />
+      <ArticleQueuePanel articles={articles} summary={articleSummary} onCreateLog={onCreateLogFromArticle} />
 
       <div className="summary-grid">
         <SummaryCard label="今月の投稿数" value={data.monthCount} />
@@ -839,7 +839,7 @@ function Home({ data, series, seriesSummary, articles, articleSummary, todayMemo
   );
 }
 
-function ArticleQueuePanel({ articles, summary, onMakeToday }) {
+function ArticleQueuePanel({ articles, summary, onCreateLog }) {
   const queue = [...articles]
     .filter((item) => item.status !== "公開済み" && item.status !== "保留")
     .sort((a, b) => `${a.dueDate || "9999"}${priorityRank(a.priority)}`.localeCompare(`${b.dueDate || "9999"}${priorityRank(b.priority)}`))
@@ -863,8 +863,8 @@ function ArticleQueuePanel({ articles, summary, onMakeToday }) {
                   <span>{item.status}</span>
                   <span>優先度: {item.priority}</span>
                 </div>
-                <button className="secondary-button compact-button" type="button" onClick={() => onMakeToday(item)}>
-                  今日のnoteにする
+                <button className="secondary-button compact-button" type="button" onClick={() => onCreateLog(item)}>
+                  投稿ログにする
                 </button>
               </div>
             </div>
