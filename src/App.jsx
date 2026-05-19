@@ -159,6 +159,30 @@ function summarizeSocialCandidates(items) {
   return { activeCount, publishedCount, nextItem };
 }
 
+function buildLogFromArticle(article, overrides = {}) {
+  const contentPieces = [
+    article.promise ? `約束: ${article.promise}` : "",
+    article.structureItem ? `構成項目: ${article.structureItem}` : "",
+    article.outline ? `構成: ${article.outline}` : "",
+    article.hook ? `冒頭: ${article.hook}` : "",
+    article.memo ? `メモ: ${article.memo}` : "",
+  ].filter(Boolean);
+
+  return {
+    ...emptyLogForm,
+    sourceArticleId: article.id,
+    publishedAt: article.dueDate || today(),
+    channel: "note",
+    title: article.title,
+    contentMemo: contentPieces.join("\n\n"),
+    url: article.publishedUrl || "",
+    theme: "note記事",
+    goal: "note誘導",
+    nextTry: article.cta || "",
+    ...overrides,
+  };
+}
+
 function App() {
   const [logs, setLogs] = useState(() => loadArray(logStorageKey));
   const [series, setSeries] = useState(() => loadArray(seriesStorageKey));
@@ -283,19 +307,48 @@ function App() {
       todayMemo.quote ? `刺さった言葉: ${todayMemo.quote}` : "",
     ].filter(Boolean);
 
-    setLogForm({
-      ...emptyLogForm,
-      sourceArticleId: selectedArticle?.id || "",
-      publishedAt: today(),
-      channel: "note",
-      title,
-      contentMemo: contentPieces.join("\n\n"),
-      url: selectedArticle?.publishedUrl || "",
-      theme: selectedArticle ? "note記事" : "",
-      goal: "note誘導",
-      goodPoint: todayMemo.reactionMemo,
-      nextTry: selectedArticle?.cta || "",
+    setLogForm(
+      selectedArticle
+        ? buildLogFromArticle(selectedArticle, {
+            publishedAt: today(),
+            title,
+            contentMemo: contentPieces.join("\n\n"),
+            goodPoint: todayMemo.reactionMemo,
+          })
+        : {
+            ...emptyLogForm,
+            publishedAt: today(),
+            channel: "note",
+            title,
+            contentMemo: contentPieces.join("\n\n"),
+            goal: "note誘導",
+            goodPoint: todayMemo.reactionMemo,
+          },
+    );
+    setActiveView("form");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function upsertLogFromArticle(article) {
+    const logFields = buildLogFromArticle(article);
+    const nextLog = {
+      ...logFields,
+      id: "",
+      title: article.title.trim(),
+      contentMemo: logFields.contentMemo.trim(),
+      url: article.publishedUrl.trim(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setLogs((current) => {
+      const existing = current.find((log) => log.sourceArticleId === article.id);
+      const logWithId = { ...nextLog, id: existing?.id || createId() };
+      return existing ? current.map((log) => (log.id === existing.id ? { ...existing, ...logWithId } : log)) : [logWithId, ...current];
     });
+  }
+
+  function createLogFromArticleCandidate(article) {
+    setLogForm(buildLogFromArticle(article));
     setActiveView("form");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -350,6 +403,7 @@ function App() {
 
     setLogForm({ ...emptyLogForm, publishedAt: today() });
     setActiveView("list");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function updateSeriesField(name, value) {
@@ -436,6 +490,12 @@ function App() {
       return exists ? current.map((item) => (item.id === nextArticle.id ? nextArticle : item)) : [nextArticle, ...current];
     });
     resetArticleForm();
+
+    if (nextArticle.status === "公開済み") {
+      upsertLogFromArticle(nextArticle);
+      setActiveView("list");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }
 
   function updateXCandidateField(name, value) {
@@ -621,7 +681,7 @@ function App() {
           onReset={resetArticleForm}
           onEdit={editArticle}
           onDelete={deleteArticle}
-          onMakeToday={makeArticleToday}
+          onCreateLog={createLogFromArticleCandidate}
         />
       )}
 
@@ -700,7 +760,7 @@ function ArticleQueuePanel({ articles, summary, onMakeToday }) {
           {queue.map((item) => (
             <div className="article-mini-item" key={item.id}>
               <div>
-                <span className="date-text">締切: {formatDate(item.dueDate)}</span>
+                <span className="date-text">投稿日: {formatDate(item.dueDate)}</span>
                 <h3>{item.title}</h3>
               </div>
               <div className="mini-card-footer">
@@ -1000,8 +1060,9 @@ function SeriesCard({ item, onEdit, onDelete }) {
   );
 }
 
-function ArticleManager({ form, items, series, summary, onFieldChange, onSubmit, onReset, onEdit, onDelete, onMakeToday }) {
-  const sortedItems = [...items].sort((a, b) =>
+function ArticleManager({ form, items, series, summary, onFieldChange, onSubmit, onReset, onEdit, onDelete, onCreateLog }) {
+  const visibleItems = items.filter((item) => item.status !== "公開済み" && item.status !== "保留");
+  const sortedItems = [...visibleItems].sort((a, b) =>
     `${a.status === "公開済み" ? 1 : 0}${a.dueDate || "9999"}${priorityRank(a.priority)}`.localeCompare(
       `${b.status === "公開済み" ? 1 : 0}${b.dueDate || "9999"}${priorityRank(b.priority)}`,
     ),
@@ -1051,7 +1112,7 @@ function ArticleManager({ form, items, series, summary, onFieldChange, onSubmit,
                 <option value="低">低</option>
               </select>
             </Field>
-            <Field label="締切">
+            <Field label="投稿日">
               <input value={form.dueDate} onChange={(event) => onFieldChange("dueDate", event.target.value)} type="date" />
             </Field>
             <Field label="公開URL">
@@ -1100,7 +1161,7 @@ function ArticleManager({ form, items, series, summary, onFieldChange, onSubmit,
 
       <div className="cards-grid">
         {sortedItems.length ? (
-          sortedItems.map((item) => <ArticleCard item={item} series={series} key={item.id} onEdit={onEdit} onDelete={onDelete} onMakeToday={onMakeToday} />)
+          sortedItems.map((item) => <ArticleCard item={item} series={series} key={item.id} onEdit={onEdit} onDelete={onDelete} onCreateLog={onCreateLog} />)
         ) : (
           <EmptyState text="まだnote記事候補がありません。" />
         )}
@@ -1109,14 +1170,14 @@ function ArticleManager({ form, items, series, summary, onFieldChange, onSubmit,
   );
 }
 
-function ArticleCard({ item, series, onEdit, onDelete, onMakeToday }) {
+function ArticleCard({ item, series, onEdit, onDelete, onCreateLog }) {
   const linkedSeries = series.find((seriesItem) => seriesItem.id === item.seriesId);
 
   return (
     <article className="log-card article-card">
       <div className="card-head">
         <div>
-          <span className="date-text">締切: {formatDate(item.dueDate)}</span>
+          <span className="date-text">投稿日: {formatDate(item.dueDate)}</span>
           <h3>{item.title}</h3>
         </div>
         <span className="badge">{item.status}</span>
@@ -1139,8 +1200,8 @@ function ArticleCard({ item, series, onEdit, onDelete, onMakeToday }) {
 
       <div className="card-actions">
         {item.status !== "公開済み" && (
-          <button className="primary-button" type="button" onClick={() => onMakeToday(item)}>
-            今日のnoteにする
+          <button className="primary-button" type="button" onClick={() => onCreateLog(item)}>
+            投稿ログにする
           </button>
         )}
         {item.publishedUrl && (
