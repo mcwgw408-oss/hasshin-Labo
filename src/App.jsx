@@ -14,6 +14,7 @@ const priceTypes = ["無料", "有料", "無料+有料"];
 const articleStatuses = ["候補", "構成中", "執筆中", "公開済み", "保留"];
 const articleStructureItems = ["共感", "構造", "不安"];
 const socialCandidateStatuses = ["候補", "作成中", "投稿済み", "保留"];
+const xTimeSlots = ["朝", "昼", "夜"];
 
 const emptyToday = {
   selectedArticleId: "",
@@ -151,12 +152,21 @@ function priorityRank(priority) {
   return 2;
 }
 
-function summarizeSocialCandidates(items) {
+function xTimeSlotRank(value) {
+  const index = xTimeSlots.indexOf(value);
+  return index === -1 ? 0 : index;
+}
+
+function socialSortRank(item, channel) {
+  return channel === "X" ? xTimeSlotRank(item.priority) : priorityRank(item.priority);
+}
+
+function summarizeSocialCandidates(items, channel) {
   const activeCount = items.filter((item) => item.status !== "投稿済み" && item.status !== "保留").length;
   const publishedCount = items.filter((item) => item.status === "投稿済み").length;
   const nextItem = [...items]
     .filter((item) => item.status !== "投稿済み" && item.status !== "保留")
-    .sort((a, b) => `${a.dueDate || "9999"}${priorityRank(a.priority)}`.localeCompare(`${b.dueDate || "9999"}${priorityRank(b.priority)}`))[0];
+    .sort((a, b) => `${a.dueDate || "9999"}${socialSortRank(a, channel)}`.localeCompare(`${b.dueDate || "9999"}${socialSortRank(b, channel)}`))[0];
 
   return { activeCount, publishedCount, nextItem };
 }
@@ -187,6 +197,7 @@ function buildLogFromArticle(article, overrides = {}) {
 
 function buildLogFromSocialCandidate(candidate, channel, overrides = {}) {
   const contentPieces = [
+    channel === "X" ? `投稿時間帯: ${xTimeSlots.includes(candidate.priority) ? candidate.priority : xTimeSlots[0]}` : "",
     candidate.goal ? `狙い: ${candidate.goal}` : "",
     candidate.targetReader ? `想定読者: ${candidate.targetReader}` : "",
     candidate.hook ? `冒頭: ${candidate.hook}` : "",
@@ -302,8 +313,8 @@ function App() {
     return { activeCount, publishedCount, nextArticle };
   }, [articles]);
 
-  const xCandidateSummary = useMemo(() => summarizeSocialCandidates(xCandidates), [xCandidates]);
-  const threadsCandidateSummary = useMemo(() => summarizeSocialCandidates(threadsCandidates), [threadsCandidates]);
+  const xCandidateSummary = useMemo(() => summarizeSocialCandidates(xCandidates, "X"), [xCandidates]);
+  const threadsCandidateSummary = useMemo(() => summarizeSocialCandidates(threadsCandidates, "Threads"), [threadsCandidates]);
 
   function startNewLog() {
     setLogForm({ ...emptyLogForm, publishedAt: today() });
@@ -578,6 +589,7 @@ function App() {
       ...form,
       id: form.id || createId(),
       title: form.title.trim(),
+      priority: channel === "X" && !xTimeSlots.includes(form.priority) ? xTimeSlots[0] : form.priority,
       targetReader: form.targetReader.trim(),
       goal: form.goal.trim(),
       hook: form.hook.trim(),
@@ -1281,10 +1293,12 @@ function ArticleCard({ item, series, onEdit, onDelete, onCreateLog }) {
 }
 
 function SocialCandidateManager({ channel, form, items, summary, onFieldChange, onSubmit, onReset, onEdit, onDelete, onCreateLog }) {
+  const isX = channel === "X";
+  const scheduleValue = isX && !xTimeSlots.includes(form.priority) ? xTimeSlots[0] : form.priority;
   const visibleItems = items.filter((item) => item.status !== "投稿済み" && item.status !== "保留");
   const sortedItems = [...visibleItems].sort((a, b) =>
-    `${a.status === "投稿済み" ? 1 : 0}${a.dueDate || "9999"}${priorityRank(a.priority)}`.localeCompare(
-      `${b.status === "投稿済み" ? 1 : 0}${b.dueDate || "9999"}${priorityRank(b.priority)}`,
+    `${a.status === "投稿済み" ? 1 : 0}${a.dueDate || "9999"}${socialSortRank(a, channel)}`.localeCompare(
+      `${b.status === "投稿済み" ? 1 : 0}${b.dueDate || "9999"}${socialSortRank(b, channel)}`,
     ),
   );
 
@@ -1315,11 +1329,21 @@ function SocialCandidateManager({ channel, form, items, summary, onFieldChange, 
                 ))}
               </select>
             </Field>
-            <Field label="優先度">
-              <select value={form.priority} onChange={(event) => onFieldChange("priority", event.target.value)}>
-                <option value="高">高</option>
-                <option value="中">中</option>
-                <option value="低">低</option>
+            <Field label={isX ? "投稿時間帯" : "優先度"}>
+              <select value={scheduleValue} onChange={(event) => onFieldChange("priority", event.target.value)}>
+                {isX ? (
+                  xTimeSlots.map((slot) => (
+                    <option value={slot} key={slot}>
+                      {slot}
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="高">高</option>
+                    <option value="中">中</option>
+                    <option value="低">低</option>
+                  </>
+                )}
               </select>
             </Field>
             <Field label="投稿日目安">
@@ -1386,7 +1410,7 @@ function SocialCandidateCard({ item, channel, onEdit, onDelete, onCreateLog }) {
 
       <div className="tag-row">
         <span>{channel}</span>
-        <span>優先度: {item.priority}</span>
+        <span>{channel === "X" ? `投稿時間帯: ${xTimeSlots.includes(item.priority) ? item.priority : xTimeSlots[0]}` : `優先度: ${item.priority}`}</span>
         {item.goal && <span>{item.goal}</span>}
       </div>
 
