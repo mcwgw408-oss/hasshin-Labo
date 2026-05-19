@@ -161,6 +161,14 @@ function socialSortRank(item, channel) {
   return channel === "X" ? xTimeSlotRank(item.priority) : priorityRank(item.priority);
 }
 
+function socialCandidateTitle(candidate, channel) {
+  const firstLine = String(candidate.body || "")
+    .trim()
+    .split(/\r?\n/)
+    .find(Boolean);
+  return firstLine ? firstLine.slice(0, 60) : `${channel}投稿候補`;
+}
+
 function summarizeSocialCandidates(items, channel) {
   const activeCount = items.filter((item) => item.status !== "投稿済み" && item.status !== "保留").length;
   const publishedCount = items.filter((item) => item.status === "投稿済み").length;
@@ -199,10 +207,7 @@ function buildLogFromSocialCandidate(candidate, channel, overrides = {}) {
   const contentPieces = [
     channel === "X" ? `投稿時間帯: ${xTimeSlots.includes(candidate.priority) ? candidate.priority : xTimeSlots[0]}` : "",
     candidate.goal ? `狙い: ${candidate.goal}` : "",
-    candidate.targetReader ? `想定読者: ${candidate.targetReader}` : "",
-    candidate.hook ? `冒頭: ${candidate.hook}` : "",
     candidate.body ? `本文: ${candidate.body}` : "",
-    candidate.cta ? `CTA: ${candidate.cta}` : "",
     candidate.memo ? `メモ: ${candidate.memo}` : "",
   ].filter(Boolean);
 
@@ -212,12 +217,11 @@ function buildLogFromSocialCandidate(candidate, channel, overrides = {}) {
     sourceCandidateType: channel,
     publishedAt: candidate.dueDate || today(),
     channel,
-    title: candidate.title,
+    title: socialCandidateTitle(candidate, channel),
     contentMemo: contentPieces.join("\n\n"),
     url: candidate.publishedUrl || "",
     theme: `${channel}投稿`,
     goal: candidate.goal || "認知",
-    nextTry: candidate.cta || "",
     ...overrides,
   };
 }
@@ -599,13 +603,13 @@ function App() {
     const nextCandidate = {
       ...form,
       id: form.id || createId(),
-      title: form.title.trim(),
+      title: "",
       priority: channel === "X" && !xTimeSlots.includes(form.priority) ? xTimeSlots[0] : form.priority,
-      targetReader: form.targetReader.trim(),
+      targetReader: "",
       goal: form.goal.trim(),
-      hook: form.hook.trim(),
+      hook: "",
       body: form.body.trim(),
-      cta: form.cta.trim(),
+      cta: "",
       memo: form.memo.trim(),
       publishedUrl: form.publishedUrl.trim(),
       updatedAt: new Date().toISOString(),
@@ -630,10 +634,10 @@ function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function deleteSocialCandidate(id, items, setItems) {
+  function deleteSocialCandidate(id, items, setItems, channel) {
     const target = items.find((item) => item.id === id);
     if (!target) return;
-    if (!window.confirm(`「${target.title}」を削除しますか？`)) return;
+    if (!window.confirm(`「${socialCandidateTitle(target, channel)}」を削除しますか？`)) return;
     setItems((current) => current.filter((item) => item.id !== id));
   }
 
@@ -642,7 +646,7 @@ function App() {
     const nextLog = {
       ...logFields,
       id: "",
-      title: candidate.title.trim(),
+      title: socialCandidateTitle(candidate, channel),
       contentMemo: logFields.contentMemo.trim(),
       url: candidate.publishedUrl.trim(),
       updatedAt: new Date().toISOString(),
@@ -790,7 +794,7 @@ function App() {
           onSubmit={(event) => saveSocialCandidate(event, xCandidateForm, "X", setXCandidates, resetXCandidateForm)}
           onReset={resetXCandidateForm}
           onEdit={(item) => editSocialCandidate(item, setXCandidateForm, "xCandidates")}
-          onDelete={(id) => deleteSocialCandidate(id, xCandidates, setXCandidates)}
+          onDelete={(id) => deleteSocialCandidate(id, xCandidates, setXCandidates, "X")}
           onCreateLog={(item) => createLogFromSocialCandidate(item, "X")}
         />
       )}
@@ -805,7 +809,7 @@ function App() {
           onSubmit={(event) => saveSocialCandidate(event, threadsCandidateForm, "Threads", setThreadsCandidates, resetThreadsCandidateForm)}
           onReset={resetThreadsCandidateForm}
           onEdit={(item) => editSocialCandidate(item, setThreadsCandidateForm, "threadsCandidates")}
-          onDelete={(id) => deleteSocialCandidate(id, threadsCandidates, setThreadsCandidates)}
+          onDelete={(id) => deleteSocialCandidate(id, threadsCandidates, setThreadsCandidates, "Threads")}
           onCreateLog={(item) => createLogFromSocialCandidate(item, "Threads")}
         />
       )}
@@ -1330,7 +1334,7 @@ function SocialCandidateManager({ channel, form, items, summary, onFieldChange, 
       <div className="summary-grid">
         <SummaryCard label="未投稿の候補" value={summary.activeCount} />
         <SummaryCard label="投稿済み" value={summary.publishedCount} />
-        <SummaryCard label="次に投稿する候補" value={summary.nextItem ? summary.nextItem.title : "未設定"} />
+        <SummaryCard label="次に投稿する候補" value={summary.nextItem ? socialCandidateTitle(summary.nextItem, channel) : "未設定"} />
       </div>
 
       <article className="panel form-panel">
@@ -1340,9 +1344,6 @@ function SocialCandidateManager({ channel, form, items, summary, onFieldChange, 
 
         <form onSubmit={onSubmit}>
           <div className="form-grid">
-            <Field label="投稿タイトル">
-              <input value={form.title} onChange={(event) => onFieldChange("title", event.target.value)} required maxLength="100" />
-            </Field>
             <Field label="ステータス">
               <select value={form.status} onChange={(event) => onFieldChange("status", event.target.value)}>
                 {socialCandidateStatuses.map((status) => (
@@ -1380,17 +1381,8 @@ function SocialCandidateManager({ channel, form, items, summary, onFieldChange, 
             </Field>
           </div>
 
-          <Field label="想定読者">
-            <textarea value={form.targetReader} onChange={(event) => onFieldChange("targetReader", event.target.value)} rows="3" />
-          </Field>
-          <Field label="冒頭の掴み">
-            <textarea value={form.hook} onChange={(event) => onFieldChange("hook", event.target.value)} rows="3" />
-          </Field>
           <Field label="投稿本文">
             <textarea value={form.body} onChange={(event) => onFieldChange("body", event.target.value)} rows={channel === "X" ? "4" : "5"} />
-          </Field>
-          <Field label="CTA / 読後にしてほしいこと">
-            <input value={form.cta} onChange={(event) => onFieldChange("cta", event.target.value)} />
           </Field>
           <Field label="メモ">
             <textarea value={form.memo} onChange={(event) => onFieldChange("memo", event.target.value)} rows="3" />
@@ -1426,7 +1418,7 @@ function SocialCandidateCard({ item, channel, onEdit, onDelete, onCreateLog }) {
       <div className="card-head">
         <div>
           <span className="date-text">投稿日目安: {formatDate(item.dueDate)}</span>
-          <h3>{item.title}</h3>
+          <h3>{socialCandidateTitle(item, channel)}</h3>
         </div>
         <span className="badge">{item.status}</span>
       </div>
@@ -1438,10 +1430,7 @@ function SocialCandidateCard({ item, channel, onEdit, onDelete, onCreateLog }) {
       </div>
 
       <div className="reflection-grid">
-        <Reflection label="想定読者" value={item.targetReader} />
-        <Reflection label="冒頭の掴み" value={item.hook} />
         <Reflection label="投稿本文" value={item.body} />
-        <Reflection label="CTA" value={item.cta} />
         <Reflection label="メモ" value={item.memo} />
       </div>
 
