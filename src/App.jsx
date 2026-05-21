@@ -6,6 +6,7 @@ const articleStorageKey = "hasshin-labo.note-articles.v1";
 const xCandidateStorageKey = "hasshin-labo.x-candidates.v1";
 const threadsCandidateStorageKey = "hasshin-labo.threads-candidates.v1";
 const todayStorageKey = "hasshin-labo.today.v1";
+const tempMemoStorageKey = "hasshin-labo.temp-memos.v1";
 
 const channels = ["X", "note", "Threads", "Instagram", "YouTube", "TikTok", "その他"];
 const goals = ["認知", "note誘導", "有料note販売", "気づき保存", "学習記録"];
@@ -15,6 +16,7 @@ const articleStatuses = ["候補", "構成中", "執筆中", "予約投稿", "�
 const articleStructureItems = ["共感", "構造", "不安"];
 const socialCandidateStatuses = ["候補", "作成中", "投稿済み", "保留"];
 const timeSlots = ["朝", "昼", "夜"];
+const tempMemoTypes = ["一言保存", "タイトル候補", "Threads化候補", "note化候補", "AI実験メモ"];
 
 const emptyToday = {
   selectedArticleId: "",
@@ -91,6 +93,13 @@ const emptySocialCandidateForm = {
   hook: "",
   body: "",
   cta: "",
+  memo: "",
+};
+
+const emptyTempMemoForm = {
+  id: "",
+  type: "一言保存",
+  body: "",
   memo: "",
 };
 
@@ -237,14 +246,18 @@ function App() {
   const [xCandidates, setXCandidates] = useState(() => loadArray(xCandidateStorageKey));
   const [threadsCandidates, setThreadsCandidates] = useState(() => loadArray(threadsCandidateStorageKey));
   const [todayMemo, setTodayMemo] = useState(() => loadObject(todayStorageKey, emptyToday));
+  const [tempMemos, setTempMemos] = useState(() => loadArray(tempMemoStorageKey));
   const [activeView, setActiveView] = useState("home");
   const [logForm, setLogForm] = useState(emptyLogForm);
   const [seriesForm, setSeriesForm] = useState(emptySeriesForm);
   const [articleForm, setArticleForm] = useState(emptyArticleForm);
   const [xCandidateForm, setXCandidateForm] = useState(emptySocialCandidateForm);
   const [threadsCandidateForm, setThreadsCandidateForm] = useState(emptySocialCandidateForm);
+  const [tempMemoForm, setTempMemoForm] = useState(emptyTempMemoForm);
   const [query, setQuery] = useState("");
   const [channelFilter, setChannelFilter] = useState("すべて");
+  const [tempMemoQuery, setTempMemoQuery] = useState("");
+  const [tempMemoTypeFilter, setTempMemoTypeFilter] = useState("すべて");
 
   useEffect(() => {
     localStorage.setItem(logStorageKey, JSON.stringify(logs));
@@ -269,6 +282,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem(todayStorageKey, JSON.stringify(todayMemo));
   }, [todayMemo]);
+
+  useEffect(() => {
+    localStorage.setItem(tempMemoStorageKey, JSON.stringify(tempMemos));
+  }, [tempMemos]);
 
   const sortedLogs = useMemo(
     () => [...logs].sort((a, b) => `${b.publishedAt}${b.updatedAt || ""}`.localeCompare(`${a.publishedAt}${a.updatedAt || ""}`)),
@@ -323,6 +340,18 @@ function App() {
 
   const xCandidateSummary = useMemo(() => summarizeSocialCandidates(xCandidates, "X"), [xCandidates]);
   const threadsCandidateSummary = useMemo(() => summarizeSocialCandidates(threadsCandidates, "Threads"), [threadsCandidates]);
+
+  const filteredTempMemos = useMemo(() => {
+    const normalizedQuery = tempMemoQuery.trim().toLowerCase();
+
+    return [...tempMemos]
+      .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""))
+      .filter((memo) => tempMemoTypeFilter === "すべて" || memo.type === tempMemoTypeFilter)
+      .filter((memo) => {
+        if (!normalizedQuery) return true;
+        return [memo.type, memo.body, memo.memo].join(" ").toLowerCase().includes(normalizedQuery);
+      });
+  }, [tempMemoQuery, tempMemoTypeFilter, tempMemos]);
 
   function startNewLog() {
     setLogForm({ ...emptyLogForm, publishedAt: today() });
@@ -681,6 +710,45 @@ function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function updateTempMemoField(name, value) {
+    setTempMemoForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function resetTempMemoForm() {
+    setTempMemoForm(emptyTempMemoForm);
+  }
+
+  function saveTempMemo(event) {
+    event.preventDefault();
+    const nextMemo = {
+      ...tempMemoForm,
+      id: tempMemoForm.id || createId(),
+      type: tempMemoForm.type || tempMemoTypes[0],
+      body: tempMemoForm.body.trim(),
+      memo: tempMemoForm.memo.trim(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setTempMemos((current) => {
+      const exists = current.some((item) => item.id === nextMemo.id);
+      return exists ? current.map((item) => (item.id === nextMemo.id ? nextMemo : item)) : [nextMemo, ...current];
+    });
+    resetTempMemoForm();
+  }
+
+  function editTempMemo(item) {
+    setTempMemoForm({ ...emptyTempMemoForm, ...item });
+    setActiveView("tempMemos");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function deleteTempMemo(id) {
+    const target = tempMemos.find((item) => item.id === id);
+    if (!target) return;
+    if (!window.confirm("この仮メモを削除しますか？")) return;
+    setTempMemos((current) => current.filter((item) => item.id !== id));
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -713,6 +781,10 @@ function App() {
         <button className={activeView === "articles" ? "active" : ""} type="button" onClick={() => setActiveView("articles")}>
           <span className="nav-label-full">note記事候補</span>
           <span className="nav-label-short">候補</span>
+        </button>
+        <button className={activeView === "tempMemos" ? "active" : ""} type="button" onClick={() => setActiveView("tempMemos")}>
+          <span className="nav-label-full">仮メモ</span>
+          <span className="nav-label-short">仮メモ</span>
         </button>
         <button className={activeView === "xCandidates" ? "active" : ""} type="button" onClick={() => setActiveView("xCandidates")}>
           <span className="nav-label-full">X候補</span>
@@ -785,6 +857,24 @@ function App() {
           onEdit={editArticle}
           onDelete={deleteArticle}
           onCreateLog={createLogFromArticleCandidate}
+        />
+      )}
+
+      {activeView === "tempMemos" && (
+        <TempMemoManager
+          form={tempMemoForm}
+          items={filteredTempMemos}
+          allItems={tempMemos}
+          totalCount={tempMemos.length}
+          query={tempMemoQuery}
+          typeFilter={tempMemoTypeFilter}
+          onQueryChange={setTempMemoQuery}
+          onTypeFilterChange={setTempMemoTypeFilter}
+          onFieldChange={updateTempMemoField}
+          onSubmit={saveTempMemo}
+          onReset={resetTempMemoForm}
+          onEdit={editTempMemo}
+          onDelete={deleteTempMemo}
         />
       )}
 
@@ -1312,6 +1402,138 @@ function ArticleCard({ item, series, onEdit, onDelete, onCreateLog }) {
             noteを開く
           </a>
         )}
+        <button className="secondary-button" type="button" onClick={() => onEdit(item)}>
+          編集
+        </button>
+        <button className="danger-button" type="button" onClick={() => onDelete(item.id)}>
+          削除
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function TempMemoManager({
+  form,
+  items,
+  allItems,
+  totalCount,
+  query,
+  typeFilter,
+  onQueryChange,
+  onTypeFilterChange,
+  onFieldChange,
+  onSubmit,
+  onReset,
+  onEdit,
+  onDelete,
+}) {
+  const pinnedTypes = tempMemoTypes.map((type) => ({
+    type,
+    count: allItems.filter((item) => item.type === type).length,
+  }));
+
+  return (
+    <section className="view-stack" aria-label="仮メモ">
+      <div className="summary-grid">
+        <SummaryCard label="仮メモ総数" value={totalCount} />
+        <SummaryCard label="表示中" value={items.length} />
+        <SummaryCard label="カテゴリ" value={typeFilter} />
+      </div>
+
+      <article className="panel form-panel temp-memo-panel">
+        <div className="section-title">
+          <h2>{form.id ? "仮メモを編集" : "仮メモを追加"}</h2>
+        </div>
+
+        <form onSubmit={onSubmit}>
+          <div className="quick-memo-grid">
+            <Field label="種類">
+              <select value={form.type} onChange={(event) => onFieldChange("type", event.target.value)}>
+                {tempMemoTypes.map((type) => (
+                  <option value={type} key={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="メモ">
+              <textarea
+                value={form.body}
+                onChange={(event) => onFieldChange("body", event.target.value)}
+                rows="3"
+                placeholder="思いついた一言、タイトル案、note化したい種など"
+                required
+              />
+            </Field>
+          </div>
+
+          <Field label="補足">
+            <input value={form.memo} onChange={(event) => onFieldChange("memo", event.target.value)} placeholder="必要なら軽く" />
+          </Field>
+
+          <div className="form-actions">
+            <button className="secondary-button" type="button" onClick={onReset}>
+              クリア
+            </button>
+            <button className="primary-button" type="submit">
+              保存
+            </button>
+          </div>
+        </form>
+      </article>
+
+      <div className="temp-memo-filters">
+        <input value={query} onChange={(event) => onQueryChange(event.target.value)} type="search" placeholder="仮メモを検索" />
+        <select value={typeFilter} onChange={(event) => onTypeFilterChange(event.target.value)}>
+          <option value="すべて">すべて</option>
+          {tempMemoTypes.map((type) => (
+            <option value={type} key={type}>
+              {type}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="temp-memo-type-row" aria-label="仮メモカテゴリ">
+        {pinnedTypes.map((item) => (
+          <button
+            className={typeFilter === item.type ? "active" : ""}
+            type="button"
+            key={item.type}
+            onClick={() => onTypeFilterChange(typeFilter === item.type ? "すべて" : item.type)}
+          >
+            <span>{item.type}</span>
+            <strong>{item.count}</strong>
+          </button>
+        ))}
+      </div>
+
+      <div className="cards-grid">
+        {items.length ? (
+          items.map((item) => <TempMemoCard item={item} key={item.id} onEdit={onEdit} onDelete={onDelete} />)
+        ) : (
+          <EmptyState text="仮メモはまだありません。思いついたものを軽く入れておけます。" />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function TempMemoCard({ item, onEdit, onDelete }) {
+  return (
+    <article className="log-card temp-memo-card">
+      <div className="card-head">
+        <div>
+          <span className="date-text">更新: {item.updatedAt ? new Date(item.updatedAt).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "未設定"}</span>
+          <h3>{item.body}</h3>
+        </div>
+        <span className="badge">{item.type}</span>
+      </div>
+
+      {item.memo && <p className="memo">{item.memo}</p>}
+
+      <div className="card-actions">
         <button className="secondary-button" type="button" onClick={() => onEdit(item)}>
           編集
         </button>

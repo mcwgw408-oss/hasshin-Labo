@@ -145,7 +145,7 @@ h3 {
   top: 0;
   z-index: 4;
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(8, 1fr);
   gap: 6px;
   margin-bottom: 16px;
   padding: 6px;
@@ -458,6 +458,10 @@ textarea:focus {
   border-left: 4px solid #0f766e;
 }
 
+.temp-memo-card {
+  border-left: 4px solid #c27803;
+}
+
 .card-head {
   display: flex;
   align-items: start;
@@ -587,6 +591,57 @@ form {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.quick-memo-grid {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.temp-memo-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 10px;
+}
+
+.temp-memo-type-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.temp-memo-type-row button {
+  display: grid;
+  gap: 4px;
+  min-height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 8px;
+  text-align: left;
+}
+
+.temp-memo-type-row button.active {
+  border-color: #c27803;
+  background: #fff7e6;
+}
+
+.temp-memo-type-row span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.temp-memo-type-row strong {
+  color: #8a4f00;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
 .number-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -625,7 +680,7 @@ label {
 
   .app-shell {
     width: 100%;
-    padding: 10px 8px calc(94px + env(safe-area-inset-bottom));
+    padding: 10px 8px calc(150px + env(safe-area-inset-bottom));
   }
 
   .topbar {
@@ -660,7 +715,7 @@ label {
     bottom: max(8px, env(safe-area-inset-bottom));
     left: 8px;
     z-index: 20;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 4px;
     margin: 0;
     padding: 6px;
@@ -705,8 +760,14 @@ label {
   .list-tools,
   .inline-memo,
   .form-grid,
-  .number-grid {
+  .number-grid,
+  .quick-memo-grid,
+  .temp-memo-filters {
     grid-template-columns: 1fr;
+  }
+
+  .temp-memo-type-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .today-list,
