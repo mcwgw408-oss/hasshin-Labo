@@ -280,16 +280,18 @@ h3 {
 .inline-memo {
   display: grid;
   grid-template-columns: 120px minmax(0, 1fr);
-  align-items: center;
+  align-items: start;
   gap: 10px;
 }
 
 .inline-memo span {
   color: var(--text);
   font-weight: 900;
+  padding-top: 10px;
 }
 
-.inline-memo input {
+.inline-memo input,
+.inline-memo textarea {
   background: var(--surface-muted);
 }
 
@@ -508,6 +510,16 @@ textarea:focus {
 .tag-row span {
   background: var(--surface-muted);
   color: #53605a;
+}
+
+.tag-row .worldline-tag {
+  background: #fff7df;
+  color: #76520f;
+}
+
+.tag-row .route-tag {
+  background: #eaf2ff;
+  color: #245487;
 }
 
 .memo {

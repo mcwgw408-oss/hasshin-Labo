@@ -12,7 +12,7 @@ https://mcwgw408-oss.github.io/hasshin-Labo/
 
 ## できること
 
-- 今日の発信メモを管理
+- 今週のテーマとタスクを管理
 - 投稿ログを記録
 - noteシリーズを管理
 - note記事候補を管理

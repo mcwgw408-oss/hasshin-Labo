@@ -14,12 +14,15 @@ const seriesStatuses = ["企画中", "執筆中", "公開中", "完了"];
 const priceTypes = ["無料", "有料", "無料+有料"];
 const articleStatuses = ["候補", "構成中", "執筆中", "予約投稿", "公開済み", "保留"];
 const articleStructureItems = ["共感", "構造", "不安"];
+const articleLinkTargets = ["note", "X", "Threads", "AI記事", "シリーズ", "有料", "マガジン"];
 const socialCandidateStatuses = ["候補", "作成中", "投稿済み", "保留"];
 const timeSlots = ["朝", "昼", "夜"];
 const tempMemoTypes = ["一言保存", "タイトル候補", "Threads化候補", "note化候補", "AI実験メモ"];
 
 const emptyToday = {
   selectedArticleId: "",
+  weeklyTheme: "",
+  task: "",
   nextNote: "",
   threadsIdea: "",
   scheduledPost: "",
@@ -75,6 +78,7 @@ const emptyArticleForm = {
   structureItem: "共感",
   outline: "",
   hook: "",
+  linkTarget: "",
   cta: "",
   memo: "",
   dueDate: "",
@@ -182,6 +186,15 @@ function socialCandidateTitle(candidate, channel) {
   return firstLine ? firstLine.slice(0, 60) : `${channel}投稿候補`;
 }
 
+function articleWorldline(article, series) {
+  const linkedSeries = series.find((seriesItem) => seriesItem.id === article.seriesId);
+  return linkedSeries ? linkedSeries.title : "世界線未定";
+}
+
+function articleLinkTarget(article) {
+  return article.linkTarget || "導線未定";
+}
+
 function summarizeSocialCandidates(items, channel) {
   const activeCount = items.filter((item) => item.status !== "投稿済み" && item.status !== "保留").length;
   const publishedCount = items.filter((item) => item.status === "投稿済み").length;
@@ -198,6 +211,7 @@ function buildLogFromArticle(article, overrides = {}) {
     article.structureItem ? `構成項目: ${article.structureItem}` : "",
     article.outline ? `構成: ${article.outline}` : "",
     article.hook ? `冒頭: ${article.hook}` : "",
+    article.linkTarget ? `導線: ${article.linkTarget}` : "",
     article.memo ? `メモ: ${article.memo}` : "",
   ].filter(Boolean);
 
@@ -596,6 +610,7 @@ function App() {
       structureItem: articleForm.structureItem || articleStructureItems[0],
       outline: articleForm.outline.trim(),
       hook: articleForm.hook.trim(),
+      linkTarget: articleForm.linkTarget,
       cta: articleForm.cta.trim(),
       memo: articleForm.memo.trim(),
       publishedUrl: articleForm.publishedUrl.trim(),
@@ -805,7 +820,6 @@ function App() {
           articleSummary={articleSummary}
           todayMemo={todayMemo}
           onTodayMemoChange={(name, value) => setTodayMemo((current) => ({ ...current, [name]: value }))}
-          onCreateLogFromToday={createLogFromToday}
           onCreateLogFromArticle={createLogFromArticleCandidate}
           onEditSeries={editSeries}
         />
@@ -911,15 +925,15 @@ function App() {
   );
 }
 
-function Home({ data, series, seriesSummary, articles, articleSummary, todayMemo, onTodayMemoChange, onCreateLogFromToday, onCreateLogFromArticle, onEditSeries }) {
+function Home({ data, series, seriesSummary, articles, articleSummary, todayMemo, onTodayMemoChange, onCreateLogFromArticle, onEditSeries }) {
   return (
     <section className="view-stack" aria-label="トップ">
       <div className="home-grid">
-        <TodayPanel memo={todayMemo} onChange={onTodayMemoChange} onCreateLog={onCreateLogFromToday} />
+        <WeeklyThemePanel memo={todayMemo} onChange={onTodayMemoChange} />
         <SeriesProgressPanel series={series} summary={seriesSummary} onEditSeries={onEditSeries} />
       </div>
 
-      <ArticleQueuePanel articles={articles} summary={articleSummary} onCreateLog={onCreateLogFromArticle} />
+      <ArticleQueuePanel articles={articles} series={series} summary={articleSummary} onCreateLog={onCreateLogFromArticle} />
 
       <div className="summary-grid">
         <SummaryCard label="今月の投稿数" value={data.monthCount} />
@@ -937,7 +951,7 @@ function Home({ data, series, seriesSummary, articles, articleSummary, todayMemo
   );
 }
 
-function ArticleQueuePanel({ articles, summary, onCreateLog }) {
+function ArticleQueuePanel({ articles, series, summary, onCreateLog }) {
   const queue = [...articles]
     .filter((item) => item.status !== "公開済み" && item.status !== "保留")
     .sort((a, b) => `${a.dueDate || "9999"}${priorityRank(a.priority)}`.localeCompare(`${b.dueDate || "9999"}${priorityRank(b.priority)}`))
@@ -946,7 +960,7 @@ function ArticleQueuePanel({ articles, summary, onCreateLog }) {
   return (
     <article className="panel">
       <div className="section-title">
-        <h2>note記事候補</h2>
+        <h2>今書く世界線</h2>
       </div>
       {queue.length ? (
         <div className="article-mini-list">
@@ -960,6 +974,8 @@ function ArticleQueuePanel({ articles, summary, onCreateLog }) {
                 <div className="tag-row">
                   <span>{item.status}</span>
                   <span>優先度: {item.priority}</span>
+                  <span className="worldline-tag">世界線: {articleWorldline(item, series)}</span>
+                  <span className="route-tag">導線: {articleLinkTarget(item)}</span>
                 </div>
                 <button className="secondary-button compact-button" type="button" onClick={() => onCreateLog(item)}>
                   投稿ログにする
@@ -971,38 +987,38 @@ function ArticleQueuePanel({ articles, summary, onCreateLog }) {
       ) : (
         <EmptyState text="記事候補を追加すると、次に書くnoteがここに並びます。" />
       )}
-      {summary.nextArticle && <p className="panel-note">次に書く候補: {summary.nextArticle.title}</p>}
+      {summary.nextArticle && (
+        <p className="panel-note">
+          次に書く候補: {summary.nextArticle.title} / {articleWorldline(summary.nextArticle, series)} から {articleLinkTarget(summary.nextArticle)} へ
+        </p>
+      )}
     </article>
   );
 }
 
-function TodayPanel({ memo, onChange, onCreateLog }) {
-  const hasTodayContent = [memo.nextNote, memo.threadsIdea, memo.scheduledPost, memo.reactionMemo, memo.quote].some((value) => String(value || "").trim());
-
+function WeeklyThemePanel({ memo, onChange }) {
   return (
     <article className="panel today-panel">
-      <div className="section-title compact-title title-with-action">
-        <h2>今日の発信</h2>
-        <button className="primary-button compact-button" type="button" onClick={onCreateLog} disabled={!hasTodayContent}>
-          投稿済みにする
-        </button>
+      <div className="section-title compact-title">
+        <h2>今週のテーマ</h2>
       </div>
       <div className="today-list">
-        <InlineMemo label="次のnote" value={memo.nextNote} onChange={(value) => onChange("nextNote", value)} />
-        <InlineMemo label="Threads候補" value={memo.threadsIdea} onChange={(value) => onChange("threadsIdea", value)} />
-        <InlineMemo label="予約投稿" value={memo.scheduledPost} onChange={(value) => onChange("scheduledPost", value)} />
-        <InlineMemo label="反応メモ" value={memo.reactionMemo} onChange={(value) => onChange("reactionMemo", value)} />
-        <InlineMemo label="刺さった言葉" value={memo.quote} onChange={(value) => onChange("quote", value)} />
+        <InlineMemo label="テーマ" value={memo.weeklyTheme} onChange={(value) => onChange("weeklyTheme", value)} placeholder="今週、何を届ける？" />
+        <InlineMemo label="タスク" value={memo.task} onChange={(value) => onChange("task", value)} placeholder="今週やること" multiline />
       </div>
     </article>
   );
 }
 
-function InlineMemo({ label, value, onChange }) {
+function InlineMemo({ label, value, onChange, placeholder = "未入力", multiline = false }) {
   return (
     <label className="inline-memo">
       <span>{label}</span>
-      <input value={value} onChange={(event) => onChange(event.target.value)} placeholder="未入力" />
+      {multiline ? (
+        <textarea value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} rows={3} />
+      ) : (
+        <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+      )}
     </label>
   );
 }
@@ -1266,7 +1282,7 @@ function ArticleManager({ form, items, series, summary, onFieldChange, onSubmit,
       <div className="summary-grid">
         <SummaryCard label="未公開の記事候補" value={summary.activeCount} />
         <SummaryCard label="公開済み記事" value={summary.publishedCount} />
-        <SummaryCard label="次に書く記事" value={summary.nextArticle ? summary.nextArticle.title : "未設定"} />
+        <SummaryCard label="次の導線" value={summary.nextArticle ? articleLinkTarget(summary.nextArticle) : "未設定"} />
       </div>
 
       <article className="panel form-panel">
@@ -1279,9 +1295,9 @@ function ArticleManager({ form, items, series, summary, onFieldChange, onSubmit,
             <Field label="記事タイトル">
               <input value={form.title} onChange={(event) => onFieldChange("title", event.target.value)} required maxLength="100" />
             </Field>
-            <Field label="紐づくシリーズ">
+            <Field label="この記事の世界線">
               <select value={form.seriesId} onChange={(event) => onFieldChange("seriesId", event.target.value)}>
-                <option value="">なし</option>
+                <option value="">まだ決めない</option>
                 {series.map((item) => (
                   <option value={item.id} key={item.id}>
                     {item.title}
@@ -1303,6 +1319,16 @@ function ArticleManager({ form, items, series, summary, onFieldChange, onSubmit,
                 <option value="高">高</option>
                 <option value="中">中</option>
                 <option value="低">低</option>
+              </select>
+            </Field>
+            <Field label="このnoteから繋げる先">
+              <select value={form.linkTarget} onChange={(event) => onFieldChange("linkTarget", event.target.value)}>
+                <option value="">まだ決めない</option>
+                {articleLinkTargets.map((target) => (
+                  <option value={target} key={target}>
+                    {target}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="投稿日">
@@ -1334,7 +1360,7 @@ function ArticleManager({ form, items, series, summary, onFieldChange, onSubmit,
           <Field label="冒頭の掴み">
             <textarea value={form.hook} onChange={(event) => onFieldChange("hook", event.target.value)} rows="3" />
           </Field>
-          <Field label="CTA / 読後にしてほしいこと">
+          <Field label="導線メモ / 読後にしてほしいこと">
             <input value={form.cta} onChange={(event) => onFieldChange("cta", event.target.value)} />
           </Field>
           <Field label="メモ">
@@ -1364,7 +1390,7 @@ function ArticleManager({ form, items, series, summary, onFieldChange, onSubmit,
 }
 
 function ArticleCard({ item, series, onEdit, onDelete, onCreateLog }) {
-  const linkedSeries = series.find((seriesItem) => seriesItem.id === item.seriesId);
+  const worldline = articleWorldline(item, series);
 
   return (
     <article className="log-card article-card">
@@ -1378,7 +1404,8 @@ function ArticleCard({ item, series, onEdit, onDelete, onCreateLog }) {
 
       <div className="tag-row">
         <span>優先度: {item.priority}</span>
-        <span>{linkedSeries ? linkedSeries.title : "シリーズなし"}</span>
+        <span className="worldline-tag">世界線: {worldline}</span>
+        <span className="route-tag">導線: {articleLinkTarget(item)}</span>
       </div>
 
       <div className="reflection-grid">
@@ -1387,7 +1414,7 @@ function ArticleCard({ item, series, onEdit, onDelete, onCreateLog }) {
         <Reflection label="構成項目" value={item.structureItem} />
         <Reflection label="構成メモ" value={item.outline} />
         <Reflection label="冒頭の掴み" value={item.hook} />
-        <Reflection label="CTA" value={item.cta} />
+        <Reflection label="導線メモ" value={item.cta} />
         <Reflection label="メモ" value={item.memo} />
       </div>
 
