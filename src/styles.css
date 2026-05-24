@@ -295,6 +295,51 @@ h3 {
   background: var(--surface-muted);
 }
 
+.weekly-task-group {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.weekly-task-group > span {
+  color: var(--text);
+  font-weight: 900;
+  padding-top: 10px;
+}
+
+.weekly-task-list {
+  display: grid;
+  gap: 8px;
+}
+
+.weekly-task-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text);
+}
+
+.weekly-task-row input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  accent-color: var(--accent);
+  padding: 0;
+}
+
+.weekly-task-row input[type="text"],
+.weekly-task-row input:not([type]) {
+  background: var(--surface-muted);
+}
+
+.weekly-task-row .task-done {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
 .series-progress-list {
   display: grid;
   gap: 10px;
@@ -771,6 +816,7 @@ label {
 
   .list-tools,
   .inline-memo,
+  .weekly-task-group,
   .form-grid,
   .number-grid,
   .quick-memo-grid,

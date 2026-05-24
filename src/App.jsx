@@ -23,6 +23,7 @@ const emptyToday = {
   selectedArticleId: "",
   weeklyTheme: "",
   task: "",
+  weeklyTasks: createEmptyWeeklyTasks(),
   nextNote: "",
   threadsIdea: "",
   scheduledPost: "",
@@ -118,6 +119,36 @@ function today() {
 function createId() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function createEmptyWeeklyTasks() {
+  return Array.from({ length: 5 }, () => ({ text: "", done: false }));
+}
+
+function normalizeWeeklyTasks(tasks, legacyTask = "") {
+  const normalized = createEmptyWeeklyTasks();
+
+  if (Array.isArray(tasks)) {
+    tasks.slice(0, 5).forEach((task, index) => {
+      if (typeof task === "string") {
+        normalized[index] = { text: task, done: false };
+        return;
+      }
+      if (task && typeof task === "object") {
+        normalized[index] = {
+          text: String(task.text || ""),
+          done: Boolean(task.done),
+        };
+      }
+    });
+    return normalized;
+  }
+
+  if (legacyTask) {
+    normalized[0] = { text: legacyTask, done: false };
+  }
+
+  return normalized;
 }
 
 function loadArray(key) {
@@ -997,6 +1028,13 @@ function ArticleQueuePanel({ articles, series, summary, onCreateLog }) {
 }
 
 function WeeklyThemePanel({ memo, onChange }) {
+  const weeklyTasks = normalizeWeeklyTasks(memo.weeklyTasks, memo.task);
+
+  function updateTask(index, field, value) {
+    const nextTasks = weeklyTasks.map((task, taskIndex) => (taskIndex === index ? { ...task, [field]: value } : task));
+    onChange("weeklyTasks", nextTasks);
+  }
+
   return (
     <article className="panel today-panel">
       <div className="section-title compact-title">
@@ -1004,9 +1042,31 @@ function WeeklyThemePanel({ memo, onChange }) {
       </div>
       <div className="today-list">
         <InlineMemo label="テーマ" value={memo.weeklyTheme} onChange={(value) => onChange("weeklyTheme", value)} placeholder="今週、何を届ける？" />
-        <InlineMemo label="タスク" value={memo.task} onChange={(value) => onChange("task", value)} placeholder="今週やること" multiline />
+        <WeeklyTaskList tasks={weeklyTasks} onTaskChange={updateTask} />
       </div>
     </article>
+  );
+}
+
+function WeeklyTaskList({ tasks, onTaskChange }) {
+  return (
+    <div className="weekly-task-group">
+      <span>タスク</span>
+      <div className="weekly-task-list">
+        {tasks.map((task, index) => (
+          <label className="weekly-task-row" key={index}>
+            <input type="checkbox" checked={task.done} onChange={(event) => onTaskChange(index, "done", event.target.checked)} />
+            <input
+              type="text"
+              className={task.done ? "task-done" : ""}
+              value={task.text}
+              onChange={(event) => onTaskChange(index, "text", event.target.value)}
+              placeholder={`タスク ${index + 1}`}
+            />
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }
 
