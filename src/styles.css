@@ -231,7 +231,6 @@ h3 {
 
 .home-quick-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   padding: 14px;
   border: 1px solid var(--line);
@@ -246,11 +245,6 @@ h3 {
   color: var(--muted);
   font-size: 0.86rem;
   font-weight: 800;
-}
-
-.today-focus-panel .quick-memo-grid {
-  display: grid;
-  gap: 10px;
 }
 
 .weekly-theme-featured {
@@ -1034,10 +1028,6 @@ label {
 
   .card-actions {
     display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .home-quick-actions {
     grid-template-columns: 1fr;
   }
 
