@@ -190,6 +190,22 @@ function formatDate(value) {
   }).format(new Date(`${value}T00:00:00`));
 }
 
+function formatTodayHeading() {
+  return new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  }).format(new Date());
+}
+
+function weeklyTaskProgress(tasks, legacyTask = "") {
+  const normalized = normalizeWeeklyTasks(tasks, legacyTask);
+  const filledTasks = normalized.filter((task) => task.text.trim());
+  const doneCount = filledTasks.filter((task) => task.done).length;
+  return { doneCount, totalCount: filledTasks.length, normalized };
+}
+
 function priorityRank(priority) {
   if (priority === "高") return 0;
   if (priority === "中") return 1;
@@ -424,6 +440,7 @@ function App() {
       selectedArticle?.structureItem ? `構成項目: ${selectedArticle.structureItem}` : "",
       selectedArticle?.outline ? `構成: ${selectedArticle.outline}` : "",
       selectedArticle?.hook ? `冒頭: ${selectedArticle.hook}` : "",
+      todayMemo.threadsIdea ? `Threads案: ${todayMemo.threadsIdea}` : "",
       todayMemo.scheduledPost ? `予約投稿: ${todayMemo.scheduledPost}` : "",
       todayMemo.quote ? `刺さった言葉: ${todayMemo.quote}` : "",
     ].filter(Boolean);
@@ -852,6 +869,9 @@ function App() {
           todayMemo={todayMemo}
           onTodayMemoChange={(name, value) => setTodayMemo((current) => ({ ...current, [name]: value }))}
           onCreateLogFromArticle={createLogFromArticleCandidate}
+          onMakeArticleToday={makeArticleToday}
+          onCreateLogFromToday={createLogFromToday}
+          onNewLog={startNewLog}
           onEditSeries={editSeries}
         />
       )}
@@ -956,21 +976,49 @@ function App() {
   );
 }
 
-function Home({ data, series, seriesSummary, articles, articleSummary, todayMemo, onTodayMemoChange, onCreateLogFromArticle, onEditSeries }) {
+function Home({
+  data,
+  series,
+  seriesSummary,
+  articles,
+  articleSummary,
+  todayMemo,
+  onTodayMemoChange,
+  onCreateLogFromArticle,
+  onMakeArticleToday,
+  onCreateLogFromToday,
+  onNewLog,
+  onEditSeries,
+}) {
+  const taskProgress = weeklyTaskProgress(todayMemo.weeklyTasks, todayMemo.task);
+  const nextArticleTitle = articleSummary.nextArticle?.title || "未設定";
+
   return (
     <section className="view-stack" aria-label="トップ">
-      <div className="home-grid">
-        <WeeklyThemePanel memo={todayMemo} onChange={onTodayMemoChange} />
-        <SeriesProgressPanel series={series} summary={seriesSummary} onEditSeries={onEditSeries} />
-      </div>
-
-      <ArticleQueuePanel articles={articles} series={series} summary={articleSummary} onCreateLog={onCreateLogFromArticle} />
+      <HomeHero taskProgress={taskProgress} />
 
       <div className="summary-grid">
         <SummaryCard label="今月の投稿数" value={data.monthCount} />
         <SummaryCard label="進行中シリーズ" value={seriesSummary.activeCount} />
         <SummaryCard label="記事候補" value={articleSummary.activeCount} />
       </div>
+
+      <HomeQuickActions nextArticleTitle={nextArticleTitle} onNewLog={onNewLog} onCreateLogFromToday={onCreateLogFromToday} />
+
+      <TodayFocusPanel memo={todayMemo} articles={articles} onChange={onTodayMemoChange} onCreateLogFromToday={onCreateLogFromToday} />
+
+      <div className="home-grid">
+        <WeeklyThemePanel memo={todayMemo} taskProgress={taskProgress} onChange={onTodayMemoChange} />
+        <SeriesProgressPanel series={series} summary={seriesSummary} onEditSeries={onEditSeries} />
+      </div>
+
+      <ArticleQueuePanel
+        articles={articles}
+        series={series}
+        summary={articleSummary}
+        onCreateLog={onCreateLogFromArticle}
+        onMakeArticleToday={onMakeArticleToday}
+      />
 
       <article className="panel">
         <div className="section-title">
@@ -982,7 +1030,78 @@ function Home({ data, series, seriesSummary, articles, articleSummary, todayMemo
   );
 }
 
-function ArticleQueuePanel({ articles, series, summary, onCreateLog }) {
+function HomeHero({ taskProgress }) {
+  const taskLabel =
+    taskProgress.totalCount > 0 ? `${taskProgress.doneCount}/${taskProgress.totalCount} 完了` : "タスク未入力";
+
+  return (
+    <article className="hero-card home-hero">
+      <div>
+        <p className="home-hero-date">{formatTodayHeading()}</p>
+        <p className="home-hero-lead">今日やることを上から順に確認できます。</p>
+      </div>
+      <div className="home-hero-stat">
+        <span>今週のタスク</span>
+        <strong>{taskLabel}</strong>
+      </div>
+    </article>
+  );
+}
+
+function HomeQuickActions({ nextArticleTitle, onNewLog, onCreateLogFromToday }) {
+  return (
+    <div className="home-quick-actions" role="group" aria-label="クイック操作">
+      <button className="primary-button" type="button" onClick={onNewLog}>
+        新規ログ登録
+      </button>
+      <button className="secondary-button" type="button" onClick={onCreateLogFromToday}>
+        今日のメモからログ
+      </button>
+      <p className="home-quick-note">次に書く候補: {nextArticleTitle}</p>
+    </div>
+  );
+}
+
+function TodayFocusPanel({ memo, articles, onChange, onCreateLogFromToday }) {
+  const activeArticles = articles.filter((item) => item.status !== "公開済み" && item.status !== "保留");
+
+  function handleArticleSelect(articleId) {
+    const selected = activeArticles.find((item) => item.id === articleId);
+    onChange("selectedArticleId", articleId);
+    if (selected) onChange("nextNote", selected.title);
+  }
+
+  return (
+    <article className="panel today-focus-panel">
+      <div className="section-title title-with-action">
+        <h2>今日のフォーカス</h2>
+        <button className="primary-button compact-button" type="button" onClick={onCreateLogFromToday}>
+          ログ下書きを作る
+        </button>
+      </div>
+      <div className="today-list quick-memo-grid">
+        <label className="inline-memo">
+          <span>記事候補</span>
+          <select value={memo.selectedArticleId} onChange={(event) => handleArticleSelect(event.target.value)}>
+            <option value="">未選択</option>
+            {activeArticles.map((item) => (
+              <option value={item.id} key={item.id}>
+                {item.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <InlineMemo label="今日書く note" value={memo.nextNote} onChange={(value) => onChange("nextNote", value)} placeholder="今日書く記事タイトル" />
+        <InlineMemo label="Threads案" value={memo.threadsIdea} onChange={(value) => onChange("threadsIdea", value)} placeholder="短く書きたいこと" multiline />
+        <InlineMemo label="予約投稿" value={memo.scheduledPost} onChange={(value) => onChange("scheduledPost", value)} placeholder="例：20:00 note公開" />
+        <InlineMemo label="反応メモ" value={memo.reactionMemo} onChange={(value) => onChange("reactionMemo", value)} placeholder="伸びた/伸びなかった感覚" multiline />
+        <InlineMemo label="刺さった言葉" value={memo.quote} onChange={(value) => onChange("quote", value)} placeholder="保存しておきたいフレーズ" />
+      </div>
+    </article>
+  );
+}
+
+function ArticleQueuePanel({ articles, series, summary, onCreateLog, onMakeArticleToday }) {
   const queue = [...articles]
     .filter((item) => item.status !== "公開済み" && item.status !== "保留")
     .sort((a, b) => `${a.dueDate || "9999"}${priorityRank(a.priority)}`.localeCompare(`${b.dueDate || "9999"}${priorityRank(b.priority)}`))
@@ -1008,9 +1127,14 @@ function ArticleQueuePanel({ articles, series, summary, onCreateLog }) {
                   <span className="worldline-tag">世界線: {articleWorldline(item, series)}</span>
                   <span className="route-tag">導線: {articleLinkTarget(item)}</span>
                 </div>
-                <button className="secondary-button compact-button" type="button" onClick={() => onCreateLog(item)}>
-                  投稿ログにする
-                </button>
+                <div className="mini-card-actions">
+                  <button className="secondary-button compact-button" type="button" onClick={() => onMakeArticleToday(item)}>
+                    今日書く
+                  </button>
+                  <button className="secondary-button compact-button" type="button" onClick={() => onCreateLog(item)}>
+                    投稿ログにする
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -1027,8 +1151,8 @@ function ArticleQueuePanel({ articles, series, summary, onCreateLog }) {
   );
 }
 
-function WeeklyThemePanel({ memo, onChange }) {
-  const weeklyTasks = normalizeWeeklyTasks(memo.weeklyTasks, memo.task);
+function WeeklyThemePanel({ memo, taskProgress, onChange }) {
+  const weeklyTasks = taskProgress.normalized;
 
   function updateTask(index, field, value) {
     const nextTasks = weeklyTasks.map((task, taskIndex) => (taskIndex === index ? { ...task, [field]: value } : task));
@@ -1037,8 +1161,13 @@ function WeeklyThemePanel({ memo, onChange }) {
 
   return (
     <article className="panel today-panel">
-      <div className="section-title compact-title">
+      <div className="section-title compact-title title-with-action">
         <h2>今週のテーマ</h2>
+        {taskProgress.totalCount > 0 && (
+          <span className="task-progress-badge">
+            {taskProgress.doneCount}/{taskProgress.totalCount}
+          </span>
+        )}
       </div>
       <div className="today-list">
         <InlineMemo label="テーマ" value={memo.weeklyTheme} onChange={(value) => onChange("weeklyTheme", value)} placeholder="今週、何を届ける？" />

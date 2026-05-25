@@ -201,6 +201,74 @@ h3 {
   gap: 14px;
 }
 
+.home-hero {
+  align-items: center;
+}
+
+.home-hero-date {
+  margin: 0 0 6px;
+  color: var(--accent-dark);
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.home-hero-lead {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.home-hero-stat {
+  display: grid;
+  gap: 4px;
+  text-align: right;
+}
+
+.home-hero-stat strong {
+  font-size: clamp(1.4rem, 5vw, 2rem);
+}
+
+.home-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.home-quick-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.today-focus-panel .quick-memo-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.task-progress-badge {
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.mini-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .panel,
 .hero-card,
 .log-card,
@@ -878,11 +946,31 @@ label {
     grid-template-columns: 1fr;
   }
 
+  .home-quick-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .home-hero {
+    align-items: start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .home-hero-stat {
+    text-align: left;
+  }
+
   .mini-card-footer,
   .title-with-action,
   .panel-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .mini-card-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
   }
 
   .primary-button,
