@@ -253,6 +253,97 @@ h3 {
   gap: 10px;
 }
 
+.weekly-theme-featured {
+  border-color: #9fd9cc;
+  background: linear-gradient(160deg, #ffffff 0%, #e8f8f3 55%, #dff5ee 100%);
+  box-shadow: 0 18px 40px rgba(15, 118, 110, 0.14);
+}
+
+.weekly-theme-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 20px 0;
+}
+
+.weekly-theme-eyebrow {
+  margin: 0 0 4px;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.weekly-theme-featured h2 {
+  font-size: clamp(1.35rem, 4.5vw, 1.75rem);
+  color: var(--accent-dark);
+}
+
+.weekly-theme-progress {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.weekly-theme-body {
+  display: grid;
+  gap: 16px;
+  padding: 16px 20px 20px;
+}
+
+.weekly-theme-field {
+  display: grid;
+  gap: 8px;
+}
+
+.weekly-theme-field > span {
+  color: var(--accent-dark);
+  font-size: 0.88rem;
+  font-weight: 900;
+}
+
+.weekly-theme-input {
+  min-height: 56px;
+  border: 2px solid #b8e6dc;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text);
+  font-size: clamp(1.1rem, 4vw, 1.35rem);
+  font-weight: 800;
+  padding: 14px 16px;
+}
+
+.weekly-theme-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.16);
+}
+
+.weekly-theme-input::placeholder {
+  color: #8aa39b;
+  font-weight: 700;
+}
+
+.weekly-task-group-featured {
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #c9ebe2;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.weekly-task-group-featured > span {
+  padding-top: 0;
+  color: var(--accent-dark);
+  font-size: 0.9rem;
+}
+
 .task-progress-badge {
   border-radius: 999px;
   background: var(--accent-soft);
@@ -956,8 +1047,17 @@ label {
     gap: 12px;
   }
 
-  .home-hero-stat {
-    text-align: left;
+  .weekly-theme-header {
+    flex-direction: column;
+    padding: 16px 16px 0;
+  }
+
+  .weekly-theme-progress {
+    align-self: start;
+  }
+
+  .weekly-theme-body {
+    padding: 14px 16px 16px;
   }
 
   .mini-card-footer,

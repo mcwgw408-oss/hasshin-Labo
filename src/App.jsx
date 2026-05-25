@@ -995,7 +995,7 @@ function Home({
 
   return (
     <section className="view-stack" aria-label="トップ">
-      <HomeHero taskProgress={taskProgress} />
+      <HomeHero />
 
       <div className="summary-grid">
         <SummaryCard label="今月の投稿数" value={data.monthCount} />
@@ -1003,14 +1003,13 @@ function Home({
         <SummaryCard label="記事候補" value={articleSummary.activeCount} />
       </div>
 
+      <WeeklyThemePanel memo={todayMemo} taskProgress={taskProgress} onChange={onTodayMemoChange} />
+
       <HomeQuickActions nextArticleTitle={nextArticleTitle} onNewLog={onNewLog} onCreateLogFromToday={onCreateLogFromToday} />
 
-      <TodayFocusPanel memo={todayMemo} articles={articles} onChange={onTodayMemoChange} onCreateLogFromToday={onCreateLogFromToday} />
+      <TodayFocusPanel memo={todayMemo} onChange={onTodayMemoChange} onCreateLogFromToday={onCreateLogFromToday} />
 
-      <div className="home-grid">
-        <WeeklyThemePanel memo={todayMemo} taskProgress={taskProgress} onChange={onTodayMemoChange} />
-        <SeriesProgressPanel series={series} summary={seriesSummary} onEditSeries={onEditSeries} />
-      </div>
+      <SeriesProgressPanel series={series} summary={seriesSummary} onEditSeries={onEditSeries} />
 
       <ArticleQueuePanel
         articles={articles}
@@ -1030,19 +1029,12 @@ function Home({
   );
 }
 
-function HomeHero({ taskProgress }) {
-  const taskLabel =
-    taskProgress.totalCount > 0 ? `${taskProgress.doneCount}/${taskProgress.totalCount} 完了` : "タスク未入力";
-
+function HomeHero() {
   return (
     <article className="hero-card home-hero">
       <div>
         <p className="home-hero-date">{formatTodayHeading()}</p>
-        <p className="home-hero-lead">今日やることを上から順に確認できます。</p>
-      </div>
-      <div className="home-hero-stat">
-        <span>今週のタスク</span>
-        <strong>{taskLabel}</strong>
+        <p className="home-hero-lead">今週のテーマを決めて、今日のフォーカスに進みます。</p>
       </div>
     </article>
   );
@@ -1062,15 +1054,7 @@ function HomeQuickActions({ nextArticleTitle, onNewLog, onCreateLogFromToday }) 
   );
 }
 
-function TodayFocusPanel({ memo, articles, onChange, onCreateLogFromToday }) {
-  const activeArticles = articles.filter((item) => item.status !== "公開済み" && item.status !== "保留");
-
-  function handleArticleSelect(articleId) {
-    const selected = activeArticles.find((item) => item.id === articleId);
-    onChange("selectedArticleId", articleId);
-    if (selected) onChange("nextNote", selected.title);
-  }
-
+function TodayFocusPanel({ memo, onChange, onCreateLogFromToday }) {
   return (
     <article className="panel today-focus-panel">
       <div className="section-title title-with-action">
@@ -1080,17 +1064,6 @@ function TodayFocusPanel({ memo, articles, onChange, onCreateLogFromToday }) {
         </button>
       </div>
       <div className="today-list quick-memo-grid">
-        <label className="inline-memo">
-          <span>記事候補</span>
-          <select value={memo.selectedArticleId} onChange={(event) => handleArticleSelect(event.target.value)}>
-            <option value="">未選択</option>
-            {activeArticles.map((item) => (
-              <option value={item.id} key={item.id}>
-                {item.title}
-              </option>
-            ))}
-          </select>
-        </label>
         <InlineMemo label="今日書く note" value={memo.nextNote} onChange={(value) => onChange("nextNote", value)} placeholder="今日書く記事タイトル" />
         <InlineMemo label="Threads案" value={memo.threadsIdea} onChange={(value) => onChange("threadsIdea", value)} placeholder="短く書きたいこと" multiline />
         <InlineMemo label="予約投稿" value={memo.scheduledPost} onChange={(value) => onChange("scheduledPost", value)} placeholder="例：20:00 note公開" />
@@ -1153,6 +1126,8 @@ function ArticleQueuePanel({ articles, series, summary, onCreateLog, onMakeArtic
 
 function WeeklyThemePanel({ memo, taskProgress, onChange }) {
   const weeklyTasks = taskProgress.normalized;
+  const taskLabel =
+    taskProgress.totalCount > 0 ? `${taskProgress.doneCount} / ${taskProgress.totalCount} 完了` : "タスクを追加";
 
   function updateTask(index, field, value) {
     const nextTasks = weeklyTasks.map((task, taskIndex) => (taskIndex === index ? { ...task, [field]: value } : task));
@@ -1160,26 +1135,34 @@ function WeeklyThemePanel({ memo, taskProgress, onChange }) {
   }
 
   return (
-    <article className="panel today-panel">
-      <div className="section-title compact-title title-with-action">
-        <h2>今週のテーマ</h2>
-        {taskProgress.totalCount > 0 && (
-          <span className="task-progress-badge">
-            {taskProgress.doneCount}/{taskProgress.totalCount}
-          </span>
-        )}
+    <article className="panel weekly-theme-featured">
+      <div className="weekly-theme-header">
+        <div>
+          <p className="weekly-theme-eyebrow">今週の方針</p>
+          <h2>今週のテーマ</h2>
+        </div>
+        <span className="weekly-theme-progress">{taskLabel}</span>
       </div>
-      <div className="today-list">
-        <InlineMemo label="テーマ" value={memo.weeklyTheme} onChange={(value) => onChange("weeklyTheme", value)} placeholder="今週、何を届ける？" />
-        <WeeklyTaskList tasks={weeklyTasks} onTaskChange={updateTask} />
+      <div className="weekly-theme-body">
+        <label className="weekly-theme-field">
+          <span>テーマ</span>
+          <input
+            className="weekly-theme-input"
+            value={memo.weeklyTheme}
+            onChange={(event) => onChange("weeklyTheme", event.target.value)}
+            placeholder="今週、何を届ける？"
+            type="text"
+          />
+        </label>
+        <WeeklyTaskList tasks={weeklyTasks} onTaskChange={updateTask} featured />
       </div>
     </article>
   );
 }
 
-function WeeklyTaskList({ tasks, onTaskChange }) {
+function WeeklyTaskList({ tasks, onTaskChange, featured = false }) {
   return (
-    <div className="weekly-task-group">
+    <div className={featured ? "weekly-task-group weekly-task-group-featured" : "weekly-task-group"}>
       <span>タスク</span>
       <div className="weekly-task-list">
         {tasks.map((task, index) => (
