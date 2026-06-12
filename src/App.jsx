@@ -7,6 +7,7 @@ const xCandidateStorageKey = "hasshin-labo.x-candidates.v1";
 const threadsCandidateStorageKey = "hasshin-labo.threads-candidates.v1";
 const todayStorageKey = "hasshin-labo.today.v1";
 const tempMemoStorageKey = "hasshin-labo.temp-memos.v1";
+const weeklyHistoryStorageKey = "hasshin-labo.weekly-history.v1";
 
 const channels = ["X", "note", "Threads", "Instagram", "YouTube", "TikTok", "その他"];
 const goals = ["認知", "note誘導", "有料note販売", "気づき保存", "学習記録"];
@@ -84,7 +85,7 @@ const emptySocialCandidateForm = {
   id: "",
   title: "",
   status: "候補",
-  priority: "中",
+  timeSlot: "朝",
   dueDate: "",
   publishedUrl: "",
   targetReader: "",
@@ -154,6 +155,16 @@ function loadArray(key) {
   }
 }
 
+function normalizeSocialCandidate(item) {
+  if (!item || typeof item !== "object") return item;
+  const { priority, ...rest } = item;
+  return { ...rest, timeSlot: socialTimeSlot(item.timeSlot || priority) };
+}
+
+function loadSocialCandidates(key) {
+  return loadArray(key).map(normalizeSocialCandidate);
+}
+
 function loadObject(key, fallback) {
   try {
     const parsed = JSON.parse(localStorage.getItem(key));
@@ -212,7 +223,7 @@ function timeSlotRank(value) {
 }
 
 function socialSortRank(item) {
-  return timeSlotRank(item.priority);
+  return timeSlotRank(item.timeSlot);
 }
 
 function socialTimeSlot(value) {
@@ -273,7 +284,7 @@ function buildLogFromArticle(article, overrides = {}) {
 
 function buildLogFromSocialCandidate(candidate, channel, overrides = {}) {
   const contentPieces = [
-    `投稿時間帯: ${socialTimeSlot(candidate.priority)}`,
+    `投稿時間帯: ${socialTimeSlot(candidate.timeSlot)}`,
     candidate.goal ? `狙い: ${candidate.goal}` : "",
     candidate.body ? `本文: ${candidate.body}` : "",
     candidate.memo ? `メモ: ${candidate.memo}` : "",
@@ -298,11 +309,14 @@ function App() {
   const [logs, setLogs] = useState(() => loadArray(logStorageKey));
   const [series, setSeries] = useState(() => loadArray(seriesStorageKey));
   const [articles, setArticles] = useState(() => loadArray(articleStorageKey));
-  const [xCandidates, setXCandidates] = useState(() => loadArray(xCandidateStorageKey));
-  const [threadsCandidates, setThreadsCandidates] = useState(() => loadArray(threadsCandidateStorageKey));
+  const [xCandidates, setXCandidates] = useState(() => loadSocialCandidates(xCandidateStorageKey));
+  const [threadsCandidates, setThreadsCandidates] = useState(() => loadSocialCandidates(threadsCandidateStorageKey));
   const [todayMemo, setTodayMemo] = useState(() => loadObject(todayStorageKey, emptyToday));
   const [tempMemos, setTempMemos] = useState(() => loadArray(tempMemoStorageKey));
+  const [weeklyHistory, setWeeklyHistory] = useState(() => loadArray(weeklyHistoryStorageKey));
   const [activeView, setActiveView] = useState("home");
+  const [socialChannel, setSocialChannel] = useState("X");
+  const [toast, setToast] = useState("");
   const [logForm, setLogForm] = useState(emptyLogForm);
   const [seriesForm, setSeriesForm] = useState(emptySeriesForm);
   const [articleForm, setArticleForm] = useState(emptyArticleForm);
@@ -342,6 +356,21 @@ function App() {
     localStorage.setItem(tempMemoStorageKey, JSON.stringify(tempMemos));
   }, [tempMemos]);
 
+  useEffect(() => {
+    localStorage.setItem(weeklyHistoryStorageKey, JSON.stringify(weeklyHistory));
+  }, [weeklyHistory]);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = setTimeout(() => setToast(""), 2400);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  function showToast(message) {
+    setToast("");
+    requestAnimationFrame(() => setToast(message));
+  }
+
   const sortedLogs = useMemo(
     () => [...logs].sort((a, b) => `${b.publishedAt}${b.updatedAt || ""}`.localeCompare(`${a.publishedAt}${a.updatedAt || ""}`)),
     [logs],
@@ -368,7 +397,11 @@ function App() {
       channel,
       count: logs.filter((log) => log.channel === channel).length,
     }));
-    const bestLog = [...logs].sort((a, b) => reactionScore(b) - reactionScore(a))[0] || null;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 30);
+    const cutoff = `${cutoffDate.getFullYear()}-${String(cutoffDate.getMonth() + 1).padStart(2, "0")}-${String(cutoffDate.getDate()).padStart(2, "0")}`;
+    const recentLogs = logs.filter((log) => (log.publishedAt || "") >= cutoff);
+    const bestLog = [...recentLogs].sort((a, b) => reactionScore(b) - reactionScore(a))[0] || null;
 
     return { monthCount: monthLogs.length, channelCounts, bestLog };
   }, [logs]);
@@ -453,6 +486,7 @@ function App() {
       ),
     );
     setActiveView("list");
+    showToast("投稿ログを作りました ✓");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -536,6 +570,7 @@ function App() {
 
     setLogForm({ ...emptyLogForm, publishedAt: today() });
     setActiveView("list");
+    showToast("ログを保存しました ✓");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -578,6 +613,7 @@ function App() {
       return exists ? current.map((item) => (item.id === nextSeries.id ? nextSeries : item)) : [nextSeries, ...current];
     });
     resetSeriesForm();
+    showToast("シリーズを保存しました ✓");
   }
 
   function updateArticleField(name, value) {
@@ -628,7 +664,10 @@ function App() {
     if (nextArticle.status === "公開済み") {
       upsertLogFromArticle(nextArticle);
       setActiveView("list");
+      showToast("記事を保存して、投稿ログを作りました ✓");
       window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      showToast("記事候補を保存しました ✓");
     }
   }
 
@@ -654,7 +693,7 @@ function App() {
       ...form,
       id: form.id || createId(),
       title: "",
-      priority: socialTimeSlot(form.priority),
+      timeSlot: socialTimeSlot(form.timeSlot),
       targetReader: "",
       goal: form.goal.trim(),
       hook: "",
@@ -674,13 +713,17 @@ function App() {
     if (nextCandidate.status === "投稿済み") {
       upsertLogFromSocialCandidate(nextCandidate, channel);
       setActiveView("list");
+      showToast("候補を保存して、投稿ログを作りました ✓");
       window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      showToast(`${channel}候補を保存しました ✓`);
     }
   }
 
-  function editSocialCandidate(item, setForm, view) {
+  function editSocialCandidate(item, setForm, channel) {
     setForm({ ...emptySocialCandidateForm, ...item });
-    setActiveView(view);
+    setSocialChannel(channel);
+    setActiveView("social");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -724,6 +767,7 @@ function App() {
       ),
     );
     setActiveView("list");
+    showToast("投稿ログを作りました ✓");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -751,6 +795,109 @@ function App() {
       return exists ? current.map((item) => (item.id === nextMemo.id ? nextMemo : item)) : [nextMemo, ...current];
     });
     resetTempMemoForm();
+    showToast("仮メモを保存しました ✓");
+  }
+
+  function promoteTempMemo(item, target) {
+    if (target === "article") {
+      const firstLine = String(item.body || "")
+        .trim()
+        .split(/\r?\n/)
+        .find(Boolean) || "";
+      setArticleForm({
+        ...emptyArticleForm,
+        title: firstLine.slice(0, 100),
+        outline: item.body || "",
+        memo: item.memo || "",
+      });
+      setActiveView("articles");
+    } else {
+      const setForm = target === "X" ? setXCandidateForm : setThreadsCandidateForm;
+      setForm({ ...emptySocialCandidateForm, body: item.body || "", memo: item.memo || "" });
+      setSocialChannel(target);
+      setActiveView("social");
+    }
+    showToast("フォームに入れました。整えて保存してください");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function closeWeek() {
+    const progress = weeklyTaskProgress(todayMemo.weeklyTasks, todayMemo.task);
+    const filledTasks = progress.normalized.filter((task) => task.text.trim());
+    if (!String(todayMemo.weeklyTheme || "").trim() && !filledTasks.length) {
+      showToast("まだ記録する内容がありません");
+      return;
+    }
+    if (!window.confirm("今週のテーマとタスクを記録に残して、新しい週を始めますか？")) return;
+
+    const entry = {
+      id: createId(),
+      closedAt: new Date().toISOString(),
+      theme: String(todayMemo.weeklyTheme || "").trim(),
+      tasks: filledTasks,
+      doneCount: progress.doneCount,
+      totalCount: progress.totalCount,
+    };
+
+    setWeeklyHistory((current) => [entry, ...current]);
+    setTodayMemo({ weeklyTheme: "", task: "", weeklyTasks: createEmptyWeeklyTasks() });
+    showToast("今週の記録を保存しました ✓");
+  }
+
+  function exportBackup() {
+    const payload = {
+      app: "hasshin-labo",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      logs,
+      series,
+      articles,
+      xCandidates,
+      threadsCandidates,
+      todayMemo,
+      tempMemos,
+      weeklyHistory,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `hasshin-labo-backup-${today()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast("バックアップを書き出しました ✓");
+  }
+
+  function importBackup(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!window.confirm("いまのデータを、読み込んだバックアップの内容で置き換えます。よろしいですか？")) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(String(reader.result));
+        if (!data || typeof data !== "object" || data.app !== "hasshin-labo") {
+          window.alert("このファイルは発信Laboのバックアップではないようです。");
+          return;
+        }
+        setLogs(Array.isArray(data.logs) ? data.logs : []);
+        setSeries(Array.isArray(data.series) ? data.series : []);
+        setArticles(Array.isArray(data.articles) ? data.articles : []);
+        setXCandidates(Array.isArray(data.xCandidates) ? data.xCandidates.map(normalizeSocialCandidate) : []);
+        setThreadsCandidates(Array.isArray(data.threadsCandidates) ? data.threadsCandidates.map(normalizeSocialCandidate) : []);
+        setTodayMemo(data.todayMemo && typeof data.todayMemo === "object" ? { ...emptyToday, ...data.todayMemo } : emptyToday);
+        setTempMemos(Array.isArray(data.tempMemos) ? data.tempMemos : []);
+        setWeeklyHistory(Array.isArray(data.weeklyHistory) ? data.weeklyHistory : []);
+        showToast("バックアップを読み込みました ✓");
+      } catch {
+        window.alert("ファイルを読み込めませんでした。バックアップファイルか確認してください。");
+      }
+    };
+    reader.readAsText(file);
   }
 
   function editTempMemo(item) {
@@ -803,13 +950,9 @@ function App() {
           <span className="nav-label-full">仮メモ</span>
           <span className="nav-label-short">仮メモ</span>
         </button>
-        <button className={activeView === "xCandidates" ? "active" : ""} type="button" onClick={() => setActiveView("xCandidates")}>
-          <span className="nav-label-full">X候補</span>
-          <span className="nav-label-short">X</span>
-        </button>
-        <button className={activeView === "threadsCandidates" ? "active" : ""} type="button" onClick={() => setActiveView("threadsCandidates")}>
-          <span className="nav-label-full">Threads候補</span>
-          <span className="nav-label-short">Threads</span>
+        <button className={activeView === "social" ? "active" : ""} type="button" onClick={() => setActiveView("social")}>
+          <span className="nav-label-full">SNS候補</span>
+          <span className="nav-label-short">SNS</span>
         </button>
       </nav>
 
@@ -821,7 +964,11 @@ function App() {
           articles={articles}
           articleSummary={articleSummary}
           todayMemo={todayMemo}
+          weeklyHistory={weeklyHistory}
           onTodayMemoChange={(name, value) => setTodayMemo((current) => ({ ...current, [name]: value }))}
+          onCloseWeek={closeWeek}
+          onExportBackup={exportBackup}
+          onImportBackup={importBackup}
           onCreateLogFromArticle={createLogFromArticleCandidate}
           onMarkArticleInProgress={markArticleInProgress}
           onNewLog={startNewLog}
@@ -893,37 +1040,54 @@ function App() {
           onReset={resetTempMemoForm}
           onEdit={editTempMemo}
           onDelete={deleteTempMemo}
+          onPromote={promoteTempMemo}
         />
       )}
 
-      {activeView === "xCandidates" && (
-        <SocialCandidateManager
-          channel="X"
-          form={xCandidateForm}
-          items={xCandidates}
-          summary={xCandidateSummary}
-          onFieldChange={updateXCandidateField}
-          onSubmit={(event) => saveSocialCandidate(event, xCandidateForm, "X", setXCandidates, resetXCandidateForm)}
-          onReset={resetXCandidateForm}
-          onEdit={(item) => editSocialCandidate(item, setXCandidateForm, "xCandidates")}
-          onDelete={(id) => deleteSocialCandidate(id, xCandidates, setXCandidates, "X")}
-          onCreateLog={(item) => createLogFromSocialCandidate(item, "X")}
-        />
+      {activeView === "social" && (
+        <div className="view-stack">
+          <div className="channel-switch" role="group" aria-label="SNSの切り替え">
+            <button className={socialChannel === "X" ? "active" : ""} type="button" onClick={() => setSocialChannel("X")}>
+              X <strong>{xCandidateSummary.activeCount}</strong>
+            </button>
+            <button className={socialChannel === "Threads" ? "active" : ""} type="button" onClick={() => setSocialChannel("Threads")}>
+              Threads <strong>{threadsCandidateSummary.activeCount}</strong>
+            </button>
+          </div>
+          {socialChannel === "X" ? (
+            <SocialCandidateManager
+              channel="X"
+              form={xCandidateForm}
+              items={xCandidates}
+              summary={xCandidateSummary}
+              onFieldChange={updateXCandidateField}
+              onSubmit={(event) => saveSocialCandidate(event, xCandidateForm, "X", setXCandidates, resetXCandidateForm)}
+              onReset={resetXCandidateForm}
+              onEdit={(item) => editSocialCandidate(item, setXCandidateForm, "X")}
+              onDelete={(id) => deleteSocialCandidate(id, xCandidates, setXCandidates, "X")}
+              onCreateLog={(item) => createLogFromSocialCandidate(item, "X")}
+            />
+          ) : (
+            <SocialCandidateManager
+              channel="Threads"
+              form={threadsCandidateForm}
+              items={threadsCandidates}
+              summary={threadsCandidateSummary}
+              onFieldChange={updateThreadsCandidateField}
+              onSubmit={(event) => saveSocialCandidate(event, threadsCandidateForm, "Threads", setThreadsCandidates, resetThreadsCandidateForm)}
+              onReset={resetThreadsCandidateForm}
+              onEdit={(item) => editSocialCandidate(item, setThreadsCandidateForm, "Threads")}
+              onDelete={(id) => deleteSocialCandidate(id, threadsCandidates, setThreadsCandidates, "Threads")}
+              onCreateLog={(item) => createLogFromSocialCandidate(item, "Threads")}
+            />
+          )}
+        </div>
       )}
 
-      {activeView === "threadsCandidates" && (
-        <SocialCandidateManager
-          channel="Threads"
-          form={threadsCandidateForm}
-          items={threadsCandidates}
-          summary={threadsCandidateSummary}
-          onFieldChange={updateThreadsCandidateField}
-          onSubmit={(event) => saveSocialCandidate(event, threadsCandidateForm, "Threads", setThreadsCandidates, resetThreadsCandidateForm)}
-          onReset={resetThreadsCandidateForm}
-          onEdit={(item) => editSocialCandidate(item, setThreadsCandidateForm, "threadsCandidates")}
-          onDelete={(id) => deleteSocialCandidate(id, threadsCandidates, setThreadsCandidates, "Threads")}
-          onCreateLog={(item) => createLogFromSocialCandidate(item, "Threads")}
-        />
+      {toast && (
+        <div className="toast" role="status" aria-live="polite">
+          {toast}
+        </div>
       )}
     </main>
   );
@@ -936,7 +1100,11 @@ function Home({
   articles,
   articleSummary,
   todayMemo,
+  weeklyHistory,
   onTodayMemoChange,
+  onCloseWeek,
+  onExportBackup,
+  onImportBackup,
   onCreateLogFromArticle,
   onMarkArticleInProgress,
   onNewLog,
@@ -955,7 +1123,7 @@ function Home({
         <SummaryCard label="記事候補" value={articleSummary.activeCount} />
       </div>
 
-      <WeeklyThemePanel memo={todayMemo} taskProgress={taskProgress} onChange={onTodayMemoChange} />
+      <WeeklyThemePanel memo={todayMemo} taskProgress={taskProgress} history={weeklyHistory} onChange={onTodayMemoChange} onCloseWeek={onCloseWeek} />
 
       <HomeQuickActions nextArticleTitle={nextArticleTitle} onNewLog={onNewLog} />
 
@@ -971,11 +1139,35 @@ function Home({
 
       <article className="panel">
         <div className="section-title">
-          <h2>一番反応が良かった投稿</h2>
+          <h2>直近30日で一番反応が良かった投稿</h2>
         </div>
-        {data.bestLog ? <LogCard log={data.bestLog} compact /> : <EmptyState text="まだ投稿ログがありません。" />}
+        {data.bestLog ? <LogCard log={data.bestLog} compact /> : <EmptyState text="直近30日の投稿ログがまだありません。" />}
       </article>
+
+      <BackupPanel onExport={onExportBackup} onImport={onImportBackup} />
     </section>
+  );
+}
+
+function BackupPanel({ onExport, onImport }) {
+  return (
+    <article className="panel backup-panel">
+      <div className="section-title">
+        <h2>データのバックアップ</h2>
+      </div>
+      <p className="panel-note backup-note">
+        データはこの端末のブラウザにだけ保存されています。ときどき書き出しておくと、端末の不調やブラウザのデータ削除があっても戻せます。別の端末への引っ越しにも使えます。
+      </p>
+      <div className="backup-actions">
+        <button className="primary-button" type="button" onClick={onExport}>
+          データを書き出す
+        </button>
+        <label className="secondary-button backup-import-label">
+          バックアップを読み込む
+          <input type="file" accept=".json,application/json" onChange={onImport} className="backup-file-input" />
+        </label>
+      </div>
+    </article>
   );
 }
 
@@ -1051,7 +1243,7 @@ function ArticleQueuePanel({ articles, series, summary, onCreateLog, onMarkArtic
   );
 }
 
-function WeeklyThemePanel({ memo, taskProgress, onChange }) {
+function WeeklyThemePanel({ memo, taskProgress, history = [], onChange, onCloseWeek }) {
   const weeklyTasks = taskProgress.normalized;
   const taskLabel =
     taskProgress.totalCount > 0 ? `${taskProgress.doneCount} / ${taskProgress.totalCount} 完了` : "タスクを追加";
@@ -1083,6 +1275,35 @@ function WeeklyThemePanel({ memo, taskProgress, onChange }) {
         </label>
         <WeeklyTaskList tasks={weeklyTasks} onTaskChange={updateTask} featured />
       </div>
+      <div className="weekly-theme-actions">
+        <button className="secondary-button compact-button" type="button" onClick={onCloseWeek}>
+          今週を締めて記録に残す
+        </button>
+      </div>
+      {history.length > 0 && (
+        <details className="weekly-history">
+          <summary>これまでの週の記録（{history.length}）</summary>
+          <div>
+            {history.slice(0, 8).map((entry) => (
+              <div className="weekly-history-item" key={entry.id}>
+                <span className="date-text">
+                  {new Date(entry.closedAt).toLocaleDateString("ja-JP", { month: "short", day: "numeric" })} 締め ・ タスク {entry.doneCount}/{entry.totalCount} 完了
+                </span>
+                <p>{entry.theme || "（テーマ未設定）"}</p>
+                {entry.tasks?.length > 0 && (
+                  <ul className="weekly-history-tasks">
+                    {entry.tasks.map((task, index) => (
+                      <li key={index} className={task.done ? "task-done" : ""}>
+                        {task.done ? "✓" : "・"} {task.text}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
     </article>
   );
 }
@@ -1356,12 +1577,25 @@ function SeriesCard({ item, onEdit, onDelete }) {
 }
 
 function ArticleManager({ form, items, series, summary, onFieldChange, onSubmit, onReset, onEdit, onDelete, onCreateLog }) {
-  const visibleItems = items.filter((item) => item.status !== "公開済み" && item.status !== "保留");
+  const [showHidden, setShowHidden] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const normalizedSearch = search.trim().toLowerCase();
+  const visibleItems = items
+    .filter((item) => showHidden || (item.status !== "公開済み" && item.status !== "保留"))
+    .filter((item) => {
+      if (!normalizedSearch) return true;
+      return [item.title, item.targetReader, item.promise, item.outline, item.hook, item.cta, item.memo]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch);
+    });
   const sortedItems = [...visibleItems].sort((a, b) =>
     `${a.status === "公開済み" ? 1 : 0}${a.dueDate || "9999"}${priorityRank(a.priority)}`.localeCompare(
       `${b.status === "公開済み" ? 1 : 0}${b.dueDate || "9999"}${priorityRank(b.priority)}`,
     ),
   );
+  const hiddenCount = items.filter((item) => item.status === "公開済み" || item.status === "保留").length;
 
   return (
     <section className="view-stack" aria-label="note記事候補リスト">
@@ -1464,11 +1698,19 @@ function ArticleManager({ form, items, series, summary, onFieldChange, onSubmit,
         </form>
       </article>
 
+      <div className="list-tools list-tools-toggle">
+        <input value={search} onChange={(event) => setSearch(event.target.value)} type="search" placeholder="記事候補を検索" />
+        <label className="show-hidden-toggle">
+          <input type="checkbox" checked={showHidden} onChange={(event) => setShowHidden(event.target.checked)} />
+          公開済み・保留も表示（{hiddenCount}）
+        </label>
+      </div>
+
       <div className="cards-grid">
         {sortedItems.length ? (
           sortedItems.map((item) => <ArticleCard item={item} series={series} key={item.id} onEdit={onEdit} onDelete={onDelete} onCreateLog={onCreateLog} />)
         ) : (
-          <EmptyState text="まだnote記事候補がありません。" />
+          <EmptyState text={showHidden || normalizedSearch ? "条件に合う記事候補がありません。" : "まだnote記事候補がありません。"} />
         )}
       </div>
     </section>
@@ -1540,6 +1782,7 @@ function TempMemoManager({
   onReset,
   onEdit,
   onDelete,
+  onPromote,
 }) {
   const pinnedTypes = tempMemoTypes.map((type) => ({
     type,
@@ -1624,7 +1867,7 @@ function TempMemoManager({
 
       <div className="cards-grid">
         {items.length ? (
-          items.map((item) => <TempMemoCard item={item} key={item.id} onEdit={onEdit} onDelete={onDelete} />)
+          items.map((item) => <TempMemoCard item={item} key={item.id} onEdit={onEdit} onDelete={onDelete} onPromote={onPromote} />)
         ) : (
           <EmptyState text="仮メモはまだありません。思いついたものを軽く入れておけます。" />
         )}
@@ -1633,7 +1876,7 @@ function TempMemoManager({
   );
 }
 
-function TempMemoCard({ item, onEdit, onDelete }) {
+function TempMemoCard({ item, onEdit, onDelete, onPromote }) {
   return (
     <article className="log-card temp-memo-card">
       <div className="card-head">
@@ -1645,6 +1888,18 @@ function TempMemoCard({ item, onEdit, onDelete }) {
       </div>
 
       {item.memo && <p className="memo">{item.memo}</p>}
+
+      <div className="promote-row" role="group" aria-label="このメモを育てる">
+        <button className="secondary-button compact-button" type="button" onClick={() => onPromote(item, "article")}>
+          記事候補にする
+        </button>
+        <button className="secondary-button compact-button" type="button" onClick={() => onPromote(item, "X")}>
+          X候補にする
+        </button>
+        <button className="secondary-button compact-button" type="button" onClick={() => onPromote(item, "Threads")}>
+          Threads候補にする
+        </button>
+      </div>
 
       <div className="card-actions">
         <button className="secondary-button" type="button" onClick={() => onEdit(item)}>
@@ -1659,13 +1914,23 @@ function TempMemoCard({ item, onEdit, onDelete }) {
 }
 
 function SocialCandidateManager({ channel, form, items, summary, onFieldChange, onSubmit, onReset, onEdit, onDelete, onCreateLog }) {
-  const scheduleValue = socialTimeSlot(form.priority);
-  const visibleItems = items.filter((item) => item.status !== "投稿済み" && item.status !== "保留");
+  const [showHidden, setShowHidden] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const scheduleValue = socialTimeSlot(form.timeSlot);
+  const normalizedSearch = search.trim().toLowerCase();
+  const visibleItems = items
+    .filter((item) => showHidden || (item.status !== "投稿済み" && item.status !== "保留"))
+    .filter((item) => {
+      if (!normalizedSearch) return true;
+      return [item.body, item.goal, item.memo].join(" ").toLowerCase().includes(normalizedSearch);
+    });
   const sortedItems = [...visibleItems].sort((a, b) =>
     `${a.status === "投稿済み" ? 1 : 0}${a.dueDate || "9999"}${socialSortRank(a)}`.localeCompare(
       `${b.status === "投稿済み" ? 1 : 0}${b.dueDate || "9999"}${socialSortRank(b)}`,
     ),
   );
+  const hiddenCount = items.filter((item) => item.status === "投稿済み" || item.status === "保留").length;
 
   return (
     <section className="view-stack" aria-label={`${channel}候補リスト`}>
@@ -1692,7 +1957,7 @@ function SocialCandidateManager({ channel, form, items, summary, onFieldChange, 
               </select>
             </Field>
             <Field label="投稿時間帯">
-              <select value={scheduleValue} onChange={(event) => onFieldChange("priority", event.target.value)}>
+              <select value={scheduleValue} onChange={(event) => onFieldChange("timeSlot", event.target.value)}>
                 {timeSlots.map((slot) => (
                   <option value={slot} key={slot}>
                     {slot}
@@ -1729,13 +1994,21 @@ function SocialCandidateManager({ channel, form, items, summary, onFieldChange, 
         </form>
       </article>
 
+      <div className="list-tools list-tools-toggle">
+        <input value={search} onChange={(event) => setSearch(event.target.value)} type="search" placeholder={`${channel}候補を検索`} />
+        <label className="show-hidden-toggle">
+          <input type="checkbox" checked={showHidden} onChange={(event) => setShowHidden(event.target.checked)} />
+          投稿済み・保留も表示（{hiddenCount}）
+        </label>
+      </div>
+
       <div className="cards-grid">
         {sortedItems.length ? (
           sortedItems.map((item) => (
             <SocialCandidateCard item={item} channel={channel} key={item.id} onEdit={onEdit} onDelete={onDelete} onCreateLog={onCreateLog} />
           ))
         ) : (
-          <EmptyState text={`${channel}候補はまだありません。`} />
+          <EmptyState text={showHidden || normalizedSearch ? "条件に合う候補がありません。" : `${channel}候補はまだありません。`} />
         )}
       </div>
     </section>
@@ -1755,7 +2028,7 @@ function SocialCandidateCard({ item, channel, onEdit, onDelete, onCreateLog }) {
 
       <div className="tag-row">
         <span>{channel}</span>
-        <span>投稿時間帯: {socialTimeSlot(item.priority)}</span>
+        <span>投稿時間帯: {socialTimeSlot(item.timeSlot)}</span>
         {item.goal && <span>{item.goal}</span>}
       </div>
 
@@ -1815,6 +2088,25 @@ function Reflection({ label, value }) {
 }
 
 function LogForm({ form, onSubmit, onFieldChange, onReset }) {
+  const hasDetailValues = Boolean(
+    form.impressions ||
+      form.likes ||
+      form.comments ||
+      form.followerChange ||
+      form.clicks ||
+      form.revenueOrPurchases ||
+      form.goodPoint ||
+      form.reason ||
+      form.nextTry,
+  );
+  const [showDetails, setShowDetails] = useState(hasDetailValues);
+
+  useEffect(() => {
+    setShowDetails(hasDetailValues);
+    // 編集対象が切り替わったときだけ開閉を初期化する
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.id]);
+
   return (
     <section className="panel form-panel" aria-label="新規登録・編集">
       <div className="section-title">
@@ -1859,24 +2151,32 @@ function LogForm({ form, onSubmit, onFieldChange, onReset }) {
           <textarea value={form.contentMemo} onChange={(event) => onFieldChange("contentMemo", event.target.value)} rows="4" />
         </Field>
 
-        <div className="number-grid">
-          <NumberField label="表示数" name="impressions" form={form} onFieldChange={onFieldChange} />
-          <NumberField label="いいね" name="likes" form={form} onFieldChange={onFieldChange} />
-          <NumberField label="コメント" name="comments" form={form} onFieldChange={onFieldChange} />
-          <NumberField label="フォロー増減" name="followerChange" form={form} onFieldChange={onFieldChange} />
-          <NumberField label="クリック数" name="clicks" form={form} onFieldChange={onFieldChange} />
-          <NumberField label="売上または購入数" name="revenueOrPurchases" form={form} onFieldChange={onFieldChange} />
-        </div>
+        <button className="secondary-button details-toggle" type="button" onClick={() => setShowDetails((current) => !current)}>
+          {showDetails ? "数値・振り返りを閉じる" : "数値・振り返りを入力する（あとからでも大丈夫）"}
+        </button>
 
-        <Field label="良かったこと">
-          <textarea value={form.goodPoint} onChange={(event) => onFieldChange("goodPoint", event.target.value)} rows="3" />
-        </Field>
-        <Field label="なぜ伸びた/伸びなかったと思うか">
-          <textarea value={form.reason} onChange={(event) => onFieldChange("reason", event.target.value)} rows="3" />
-        </Field>
-        <Field label="次に試すこと">
-          <textarea value={form.nextTry} onChange={(event) => onFieldChange("nextTry", event.target.value)} rows="3" />
-        </Field>
+        {showDetails && (
+          <>
+            <div className="number-grid">
+              <NumberField label="表示数" name="impressions" form={form} onFieldChange={onFieldChange} />
+              <NumberField label="いいね" name="likes" form={form} onFieldChange={onFieldChange} />
+              <NumberField label="コメント" name="comments" form={form} onFieldChange={onFieldChange} />
+              <NumberField label="フォロー増減" name="followerChange" form={form} onFieldChange={onFieldChange} />
+              <NumberField label="クリック数" name="clicks" form={form} onFieldChange={onFieldChange} />
+              <NumberField label="売上または購入数" name="revenueOrPurchases" form={form} onFieldChange={onFieldChange} />
+            </div>
+
+            <Field label="良かったこと">
+              <textarea value={form.goodPoint} onChange={(event) => onFieldChange("goodPoint", event.target.value)} rows="3" />
+            </Field>
+            <Field label="なぜ伸びた/伸びなかったと思うか">
+              <textarea value={form.reason} onChange={(event) => onFieldChange("reason", event.target.value)} rows="3" />
+            </Field>
+            <Field label="次に試すこと">
+              <textarea value={form.nextTry} onChange={(event) => onFieldChange("nextTry", event.target.value)} rows="3" />
+            </Field>
+          </>
+        )}
 
         <div className="form-actions">
           <button className="secondary-button" type="button" onClick={onReset}>
